@@ -1,7 +1,6 @@
-// Smart API: Menggunakan json-server di lokal jika aktif,
-// atau otomatis fallback ke localStorage jika di-deploy ke Vercel (serverless).
-
-const API_BASE = '/api';
+// Smart API:
+// - Di lokal (localhost): Bisa terhubung ke json-server jika aktif, atau fallback ke localStorage.
+// - Di Vercel / Cloud: 100% menggunakan localStorage secara mandiri tanpa memicu error 405.
 
 const initialData = {
   monthlyDates: [
@@ -46,7 +45,14 @@ const initialData = {
   ]
 };
 
-// Helper localStorage
+// Cek apakah berjalan di localhost
+function isLocalhost() {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.');
+}
+
+// LocalStorage helpers
 function getLocal(key) {
   try {
     const data = localStorage.getItem(`list_date_${key}`);
@@ -66,20 +72,32 @@ function setLocal(key, data) {
   }
 }
 
-let isBackendAvailable = null;
+let backendChecked = false;
+let backendAvailable = false;
 
 async function checkBackend() {
-  if (isBackendAvailable !== null) return isBackendAvailable;
+  // Jika di Vercel (bukan localhost), langsung gunakan localStorage
+  if (!isLocalhost()) return false;
+  if (backendChecked) return backendAvailable;
+
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1200);
-    const res = await fetch(`${API_BASE}/monthlyDates`, { signal: controller.signal });
+    const timeout = setTimeout(() => controller.abort(), 1000);
+    const res = await fetch('/api/monthlyDates', { signal: controller.signal });
     clearTimeout(timeout);
-    isBackendAvailable = res.ok;
+    
+    const contentType = res.headers.get('content-type');
+    // Harus respon 200 dan benar-benar JSON (bukan HTML dari Vercel/Vite fallback)
+    if (res.ok && contentType && contentType.includes('application/json')) {
+      backendAvailable = true;
+    } else {
+      backendAvailable = false;
+    }
   } catch {
-    isBackendAvailable = false;
+    backendAvailable = false;
   }
-  return isBackendAvailable;
+  backendChecked = true;
+  return backendAvailable;
 }
 
 export const api = {
@@ -87,10 +105,15 @@ export const api = {
   async getMonthlyDates() {
     if (await checkBackend()) {
       try {
-        const res = await fetch(`${API_BASE}/monthlyDates`);
-        return await res.json();
-      } catch {
-        // fallback
+        const res = await fetch('/api/monthlyDates');
+        if (res.ok) {
+          const contentType = res.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            return await res.json();
+          }
+        }
+      } catch (err) {
+        console.warn('Backend fetch error, fallback to localStorage', err);
       }
     }
     return getLocal('monthlyDates');
@@ -99,14 +122,14 @@ export const api = {
   async addMonthlyDate(data) {
     if (await checkBackend()) {
       try {
-        const res = await fetch(`${API_BASE}/monthlyDates`, {
+        const res = await fetch('/api/monthlyDates', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         });
-        return await res.json();
-      } catch {
-        // fallback
+        if (res.ok) return await res.json();
+      } catch (err) {
+        console.warn('Backend add error, fallback to localStorage', err);
       }
     }
     const current = getLocal('monthlyDates');
@@ -119,14 +142,14 @@ export const api = {
   async updateMonthlyDate(id, data) {
     if (await checkBackend()) {
       try {
-        const res = await fetch(`${API_BASE}/monthlyDates/${id}`, {
+        const res = await fetch(`/api/monthlyDates/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         });
-        return await res.json();
-      } catch {
-        // fallback
+        if (res.ok) return await res.json();
+      } catch (err) {
+        console.warn('Backend update error, fallback to localStorage', err);
       }
     }
     const current = getLocal('monthlyDates');
@@ -138,10 +161,10 @@ export const api = {
   async deleteMonthlyDate(id) {
     if (await checkBackend()) {
       try {
-        await fetch(`${API_BASE}/monthlyDates/${id}`, { method: 'DELETE' });
-        return;
-      } catch {
-        // fallback
+        const res = await fetch(`/api/monthlyDates/${id}`, { method: 'DELETE' });
+        if (res.ok) return;
+      } catch (err) {
+        console.warn('Backend delete error, fallback to localStorage', err);
       }
     }
     const current = getLocal('monthlyDates');
@@ -153,10 +176,15 @@ export const api = {
   async getLongTermDates() {
     if (await checkBackend()) {
       try {
-        const res = await fetch(`${API_BASE}/longTermDates`);
-        return await res.json();
-      } catch {
-        // fallback
+        const res = await fetch('/api/longTermDates');
+        if (res.ok) {
+          const contentType = res.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            return await res.json();
+          }
+        }
+      } catch (err) {
+        console.warn('Backend fetch error, fallback to localStorage', err);
       }
     }
     return getLocal('longTermDates');
@@ -165,14 +193,14 @@ export const api = {
   async addLongTermDate(data) {
     if (await checkBackend()) {
       try {
-        const res = await fetch(`${API_BASE}/longTermDates`, {
+        const res = await fetch('/api/longTermDates', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         });
-        return await res.json();
-      } catch {
-        // fallback
+        if (res.ok) return await res.json();
+      } catch (err) {
+        console.warn('Backend add error, fallback to localStorage', err);
       }
     }
     const current = getLocal('longTermDates');
@@ -185,14 +213,14 @@ export const api = {
   async updateLongTermDate(id, data) {
     if (await checkBackend()) {
       try {
-        const res = await fetch(`${API_BASE}/longTermDates/${id}`, {
+        const res = await fetch(`/api/longTermDates/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         });
-        return await res.json();
-      } catch {
-        // fallback
+        if (res.ok) return await res.json();
+      } catch (err) {
+        console.warn('Backend update error, fallback to localStorage', err);
       }
     }
     const current = getLocal('longTermDates');
@@ -204,10 +232,10 @@ export const api = {
   async deleteLongTermDate(id) {
     if (await checkBackend()) {
       try {
-        await fetch(`${API_BASE}/longTermDates/${id}`, { method: 'DELETE' });
-        return;
-      } catch {
-        // fallback
+        const res = await fetch(`/api/longTermDates/${id}`, { method: 'DELETE' });
+        if (res.ok) return;
+      } catch (err) {
+        console.warn('Backend delete error, fallback to localStorage', err);
       }
     }
     const current = getLocal('longTermDates');

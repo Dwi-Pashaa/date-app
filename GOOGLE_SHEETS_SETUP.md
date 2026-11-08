@@ -50,3 +50,4 @@ Ikuti langkah mudah di bawah ini (hanya butuh waktu ~2 menit):
 3. Tempel URL Web App yang sudah kamu salin tadi.
 4. Klik **"Simpan & Sinkronkan"**.
 5. Selesai! 🎉 Sekarang seluruh data kamu tersimpan permanen di Google Sheet dan bisa diakses berdua secara real-time dari HP maupun laptop mana pun!
+

@@ -17,8 +17,12 @@ export default function DateForm({ type, editItem, onSave, onCancel }) {
 
   useEffect(() => {
     if (editItem) {
+      const cleanDate = editItem.date
+        ? (editItem.date.includes('T') ? editItem.date.split('T')[0] : editItem.date)
+        : '';
       setForm({
         ...editItem,
+        date: cleanDate,
         savingsTarget: editItem.savingsTarget ?? '',
         savedAmount: editItem.savedAmount ?? '',
       });

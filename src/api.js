@@ -6,7 +6,7 @@
 // Masukkan URL Google Apps Script Web App kamu di sini agar tertanam permanen.
 // Siapapun yang membuka web dari HP / laptop mana pun akan langsung terhubung otomatis!
 // =========================================================================================
-export const EMBEDDED_SHEETS_URL = "";
+export const EMBEDDED_SHEETS_URL = "https://script.google.com/macros/s/AKfycbw5rmxSF24QtEzafYUHSpp39bhT0uo2IBxqjFylJkBdH_xxvEJGmXngAmPWSPQElih3/exec";
 
 const initialData = {
   monthlyDates: [

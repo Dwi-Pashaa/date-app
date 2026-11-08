@@ -1,11 +1,4 @@
-import {
-  FiSearch,
-  FiCheckCircle,
-  FiClock,
-  FiList,
-  FiSliders,
-  FiX,
-} from "react-icons/fi";
+import { FiSearch, FiCheckCircle, FiClock, FiList, FiSliders, FiX } from 'react-icons/fi';
 
 export default function FilterBar({
   searchQuery,
@@ -17,9 +10,9 @@ export default function FilterBar({
   isLongTerm,
 }) {
   const filters = [
-    { id: "all", label: "Semua", icon: FiList },
-    { id: "pending", label: "Belum", icon: FiClock },
-    { id: "visited", label: "Selesai", icon: FiCheckCircle },
+    { id: 'all', label: 'Semua', icon: FiList },
+    { id: 'pending', label: 'Belum', icon: FiClock },
+    { id: 'visited', label: 'Selesai', icon: FiCheckCircle },
   ];
 
   return (
@@ -37,7 +30,7 @@ export default function FilterBar({
         {searchQuery && (
           <button
             type="button"
-            onClick={() => onSearchChange("")}
+            onClick={() => onSearchChange('')}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 hover:text-slate-600 bg-slate-200 hover:bg-slate-300 rounded-full w-4 h-4 flex items-center justify-center cursor-pointer"
             title="Hapus pencarian"
           >
@@ -59,9 +52,7 @@ export default function FilterBar({
             <option value="date-desc">📅 Tanggal Target Terbaru</option>
             <option value="date-asc">⏳ Tanggal Target Terdekat</option>
             <option value="name-asc">🔤 Nama (A - Z)</option>
-            {isLongTerm && (
-              <option value="savings-desc">💰 Tabungan Terbanyak</option>
-            )}
+            {isLongTerm && <option value="savings-desc">💰 Tabungan Terbanyak</option>}
           </select>
         </div>
 
@@ -77,8 +68,8 @@ export default function FilterBar({
                 onClick={() => onStatusFilterChange(f.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   isActive
-                    ? "bg-white text-blue-600 shadow-xs"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? 'bg-white text-blue-600 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />

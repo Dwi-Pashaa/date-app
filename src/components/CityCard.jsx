@@ -9,10 +9,21 @@ import {
   FiArrowRight,
 } from 'react-icons/fi';
 
+function safeParseDate(val) {
+  if (!val) return null;
+  if (val instanceof Date && !isNaN(val.getTime())) return val;
+  let s = String(val).trim();
+  if (!s || s === 'null' || s === 'undefined') return null;
+  if (s.indexOf('T') !== -1) s = s.split('T')[0];
+  if (s.endsWith(' GM')) s = s + 'T';
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+  return null;
+}
+
 function formatDateRange(startDate, endDate) {
-  if (!startDate) return '-';
-  const start = new Date(startDate);
-  const end = endDate ? new Date(endDate) : start;
+  const start = safeParseDate(startDate);
+  if (!start) return '-';
 
   const startStr = start.toLocaleDateString('id-ID', {
     day: 'numeric',
@@ -20,7 +31,8 @@ function formatDateRange(startDate, endDate) {
     year: 'numeric',
   });
 
-  if (!endDate || startDate === endDate) return startStr;
+  const end = safeParseDate(endDate);
+  if (!end) return startStr;
 
   const endStr = end.toLocaleDateString('id-ID', {
     day: 'numeric',
@@ -28,14 +40,16 @@ function formatDateRange(startDate, endDate) {
     year: 'numeric',
   });
 
+  if (startStr === endStr) return startStr;
   return `${startStr} – ${endStr}`;
 }
 
 function calculateDays(startDate, endDate) {
-  if (!startDate || !endDate) return null;
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const diffTime = end - start;
+  const start = safeParseDate(startDate);
+  const end = safeParseDate(endDate);
+  if (!start || !end) return null;
+
+  const diffTime = end.getTime() - start.getTime();
   const days = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
   if (days <= 0) return '1 Hari';
   const nights = days - 1;
@@ -140,4 +154,3 @@ export default function CityCard({ city, onEdit, onDelete, onOpenDetail }) {
     </div>
   );
 }
-

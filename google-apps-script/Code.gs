@@ -14,16 +14,25 @@
 function formatCellDate(val) {
   if (!val) return "";
   if (val instanceof Date) {
+    if (isNaN(val.getTime())) return "";
     var yyyy = val.getFullYear();
     var mm = String(val.getMonth() + 1).padStart(2, '0');
     var dd = String(val.getDate()).padStart(2, '0');
     return yyyy + "-" + mm + "-" + dd;
   }
-  var str = String(val).trim();
-  if (str.indexOf("T") !== -1) {
-    return str.split("T")[0];
+  var s = String(val).trim();
+  if (!s || s === "null" || s === "undefined") return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (s.indexOf("T") !== -1) return s.split("T")[0];
+  if (s.endsWith(" GM")) s = s + "T";
+  var dObj = new Date(s);
+  if (!isNaN(dObj.getTime())) {
+    var y = dObj.getFullYear();
+    var m = String(dObj.getMonth() + 1).padStart(2, '0');
+    var d = String(dObj.getDate()).padStart(2, '0');
+    return y + "-" + m + "-" + d;
   }
-  return str;
+  return s;
 }
 
 function setupSheets(ss) {

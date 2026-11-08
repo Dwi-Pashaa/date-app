@@ -7,13 +7,31 @@
 // =========================================================================================
 export const EMBEDDED_SHEETS_URL = "https://script.google.com/macros/s/AKfycbw5rmxSF24QtEzafYUHSpp39bhT0uo2IBxqjFylJkBdH_xxvEJGmXngAmPWSPQElih3/exec";
 
-function normalizeDate(val) {
+export function normalizeDate(val) {
   if (!val) return "";
-  const str = String(val).trim();
-  if (str.includes("T")) {
-    return str.split("T")[0];
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return "";
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
-  return str;
+  let s = String(val).trim();
+  if (!s || s === "null" || s === "undefined") return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (s.indexOf("T") !== -1) return s.split("T")[0];
+  
+  // Tangani format yang terpotong dari Google Apps Script seperti "... GM"
+  if (s.endsWith(" GM")) s = s + "T";
+  
+  const dObj = new Date(s);
+  if (!isNaN(dObj.getTime())) {
+    const y = dObj.getFullYear();
+    const m = String(dObj.getMonth() + 1).padStart(2, '0');
+    const d = String(dObj.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return s;
 }
 
 const initialData = {
@@ -252,8 +270,13 @@ export const api = {
         memoryStore.cityTrips = rawCities.map((item) => ({
           ...item,
           startDate: normalizeDate(item.startDate),
-          endDate: normalizeDate(item.endDate),
-          destinations: Array.isArray(item.destinations) ? item.destinations : [],
+          endDate: normalizeDate(item.endDate || item.startDate),
+          destinations: Array.isArray(item.destinations)
+            ? item.destinations.map((d) => ({
+                ...d,
+                date: normalizeDate(d.date),
+              }))
+            : [],
         }));
       }
     }
@@ -371,8 +394,13 @@ export const api = {
       ...data,
       id: 'city_' + Date.now(),
       startDate: normalizeDate(data.startDate),
-      endDate: normalizeDate(data.endDate),
-      destinations: data.destinations || [],
+      endDate: normalizeDate(data.endDate || data.startDate),
+      destinations: Array.isArray(data.destinations)
+        ? data.destinations.map((d) => ({
+            ...d,
+            date: normalizeDate(d.date),
+          }))
+        : [],
       createdAt: new Date().toISOString(),
     };
     memoryStore.cityTrips = [newItem, ...memoryStore.cityTrips];
@@ -388,7 +416,13 @@ export const api = {
     const cleanData = {
       ...data,
       startDate: normalizeDate(data.startDate),
-      endDate: normalizeDate(data.endDate),
+      endDate: normalizeDate(data.endDate || data.startDate),
+      destinations: Array.isArray(data.destinations)
+        ? data.destinations.map((d) => ({
+            ...d,
+            date: normalizeDate(d.date),
+          }))
+        : undefined,
     };
     memoryStore.cityTrips = memoryStore.cityTrips.map((item) =>
       String(item.id) === String(id) ? { ...item, ...cleanData, id } : item

@@ -20,9 +20,22 @@ function formatCurrency(num) {
   }).format(num);
 }
 
+function safeParseDate(val) {
+  if (!val) return null;
+  if (val instanceof Date && !isNaN(val.getTime())) return val;
+  let s = String(val).trim();
+  if (!s || s === 'null' || s === 'undefined') return null;
+  if (s.indexOf('T') !== -1) s = s.split('T')[0];
+  if (s.endsWith(' GM')) s = s + 'T';
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+  return null;
+}
+
 function formatDate(dateStr) {
-  if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleDateString('id-ID', {
+  const d = safeParseDate(dateStr);
+  if (!d) return '-';
+  return d.toLocaleDateString('id-ID', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -31,8 +44,8 @@ function formatDate(dateStr) {
 }
 
 function getDaysUntil(dateStr) {
-  if (!dateStr) return '';
-  const target = new Date(dateStr);
+  const target = safeParseDate(dateStr);
+  if (!target) return '';
   const now = new Date();
   target.setHours(0, 0, 0, 0);
   now.setHours(0, 0, 0, 0);

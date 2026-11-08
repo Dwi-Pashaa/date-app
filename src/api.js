@@ -1,6 +1,6 @@
 // Smart Data API
-// 1. Google Spreadsheet jika URL disetting (Cloud Data Permanen).
-// 2. Local Storage browser (Otomatis & Realtime di Vercel maupun lokal).
+// Data disimpan di In-Memory State (dan langsung sinkron ke Google Spreadsheet jika terhubung).
+// Sesuai permintaan: TIDAK menyimpan data list ke localStorage browser.
 
 const initialData = {
   monthlyDates: [
@@ -49,7 +49,21 @@ const initialData = {
   ]
 };
 
-// URL Google Sheets dari localStorage atau .env
+// In-Memory Store (Murni di memori RAM aplikasi, TANPA localStorage)
+let memoryStore = {
+  monthlyDates: JSON.parse(JSON.stringify(initialData.monthlyDates)),
+  longTermDates: JSON.parse(JSON.stringify(initialData.longTermDates)),
+};
+
+// Bersihkan data list lama dari localStorage jika sebelumnya sempat tersimpan
+if (typeof window !== 'undefined') {
+  try {
+    localStorage.removeItem('list_date_monthlyDates');
+    localStorage.removeItem('list_date_longTermDates');
+  } catch {}
+}
+
+// URL Google Sheets dari memory/session
 export function getSheetsUrl() {
   if (typeof window === 'undefined') return '';
   const stored = localStorage.getItem('list_date_sheets_url');
@@ -67,29 +81,6 @@ export function setSheetsUrl(url) {
   }
 }
 
-// LocalStorage helpers
-function getLocal(key) {
-  try {
-    const raw = localStorage.getItem(`list_date_${key}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
-    localStorage.setItem(`list_date_${key}`, JSON.stringify(initialData[key]));
-    return initialData[key];
-  } catch {
-    return initialData[key];
-  }
-}
-
-function setLocal(key, data) {
-  try {
-    localStorage.setItem(`list_date_${key}`, JSON.stringify(data));
-  } catch (err) {
-    console.error('Gagal menulis localStorage', err);
-  }
-}
-
 // Google Sheets Fetcher
 async function fetchGoogleSheets() {
   const url = getSheetsUrl();
@@ -103,7 +94,7 @@ async function fetchGoogleSheets() {
     }
     return null;
   } catch (err) {
-    console.warn('Gagal membaca Google Sheets, memakai data lokal:', err);
+    console.warn('Gagal membaca Google Sheets:', err);
     return null;
   }
 }
@@ -158,29 +149,22 @@ export const api = {
 
   // Monthly Dates
   async getMonthlyDates() {
-    const local = getLocal('monthlyDates');
     const sheetsData = await fetchGoogleSheets();
     if (sheetsData && Array.isArray(sheetsData.monthlyDates)) {
-      // Gabungkan data sheets dengan data lokal yang baru ditambahkan
-      const sheetsIds = new Set(sheetsData.monthlyDates.map((d) => String(d.id)));
-      const pendingLocal = local.filter((d) => !sheetsIds.has(String(d.id)));
-      const merged = [...pendingLocal, ...sheetsData.monthlyDates];
-      setLocal('monthlyDates', merged);
-      return merged;
+      memoryStore.monthlyDates = sheetsData.monthlyDates;
+      return memoryStore.monthlyDates;
     }
-    return local;
+    return memoryStore.monthlyDates;
   },
 
   async addMonthlyDate(data) {
-    const current = getLocal('monthlyDates');
     const newItem = {
       ...data,
       id: 'm_' + Date.now(),
       createdAt: new Date().toISOString(),
     };
-    // Letakkan yang terbaru di index paling depan
-    const updated = [newItem, ...current];
-    setLocal('monthlyDates', updated);
+    // Simpan ke in-memory store (terbaru di depan)
+    memoryStore.monthlyDates = [newItem, ...memoryStore.monthlyDates];
 
     if (getSheetsUrl()) {
       sendGoogleSheetsAction('add', 'monthlyDates', newItem);
@@ -190,11 +174,9 @@ export const api = {
   },
 
   async updateMonthlyDate(id, data) {
-    const current = getLocal('monthlyDates');
-    const updated = current.map((item) =>
+    memoryStore.monthlyDates = memoryStore.monthlyDates.map((item) =>
       String(item.id) === String(id) ? { ...item, ...data, id } : item
     );
-    setLocal('monthlyDates', updated);
 
     if (getSheetsUrl()) {
       sendGoogleSheetsAction('update', 'monthlyDates', { ...data, id });
@@ -204,9 +186,9 @@ export const api = {
   },
 
   async deleteMonthlyDate(id) {
-    const current = getLocal('monthlyDates');
-    const updated = current.filter((item) => String(item.id) !== String(id));
-    setLocal('monthlyDates', updated);
+    memoryStore.monthlyDates = memoryStore.monthlyDates.filter(
+      (item) => String(item.id) !== String(id)
+    );
 
     if (getSheetsUrl()) {
       sendGoogleSheetsAction('delete', 'monthlyDates', id);
@@ -215,28 +197,21 @@ export const api = {
 
   // Long Term Dates
   async getLongTermDates() {
-    const local = getLocal('longTermDates');
     const sheetsData = await fetchGoogleSheets();
     if (sheetsData && Array.isArray(sheetsData.longTermDates)) {
-      const sheetsIds = new Set(sheetsData.longTermDates.map((d) => String(d.id)));
-      const pendingLocal = local.filter((d) => !sheetsIds.has(String(d.id)));
-      const merged = [...pendingLocal, ...sheetsData.longTermDates];
-      setLocal('longTermDates', merged);
-      return merged;
+      memoryStore.longTermDates = sheetsData.longTermDates;
+      return memoryStore.longTermDates;
     }
-    return local;
+    return memoryStore.longTermDates;
   },
 
   async addLongTermDate(data) {
-    const current = getLocal('longTermDates');
     const newItem = {
       ...data,
       id: 'lt_' + Date.now(),
       createdAt: new Date().toISOString(),
     };
-    // Letakkan yang terbaru di index paling depan
-    const updated = [newItem, ...current];
-    setLocal('longTermDates', updated);
+    memoryStore.longTermDates = [newItem, ...memoryStore.longTermDates];
 
     if (getSheetsUrl()) {
       sendGoogleSheetsAction('add', 'longTermDates', newItem);
@@ -246,11 +221,9 @@ export const api = {
   },
 
   async updateLongTermDate(id, data) {
-    const current = getLocal('longTermDates');
-    const updated = current.map((item) =>
+    memoryStore.longTermDates = memoryStore.longTermDates.map((item) =>
       String(item.id) === String(id) ? { ...item, ...data, id } : item
     );
-    setLocal('longTermDates', updated);
 
     if (getSheetsUrl()) {
       sendGoogleSheetsAction('update', 'longTermDates', { ...data, id });
@@ -260,9 +233,9 @@ export const api = {
   },
 
   async deleteLongTermDate(id) {
-    const current = getLocal('longTermDates');
-    const updated = current.filter((item) => String(item.id) !== String(id));
-    setLocal('longTermDates', updated);
+    memoryStore.longTermDates = memoryStore.longTermDates.filter(
+      (item) => String(item.id) !== String(id)
+    );
 
     if (getSheetsUrl()) {
       sendGoogleSheetsAction('delete', 'longTermDates', id);

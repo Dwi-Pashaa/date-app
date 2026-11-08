@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FiX, FiMapPin, FiCalendar, FiLink, FiTarget } from 'react-icons/fi';
+import { FiX, FiMapPin, FiCalendar, FiLink, FiTarget, FiHeart } from 'react-icons/fi';
 import { FaPiggyBank } from 'react-icons/fa';
 import ImageUploadInput from './ImageUploadInput';
 
@@ -90,8 +90,12 @@ export default function DateForm({ type, editItem, onSave, onCancel }) {
           {/* Name */}
           <div>
             <label className="flex items-center gap-2 text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">
-              <FiTarget className="w-3.5 h-3.5 text-blue-500" />
-              Nama Tempat / Aktivitas
+              {type === 'longterm' ? (
+                <FiTarget className="w-3.5 h-3.5 text-blue-500" />
+              ) : (
+                <FiHeart className="w-3.5 h-3.5 text-rose-500" />
+              )}
+              {type === 'longterm' ? 'Nama Destinasi Impian' : 'Nama Tempat / Aktivitas'}
             </label>
             <input
               type="text"

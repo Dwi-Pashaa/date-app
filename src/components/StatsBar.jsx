@@ -1,4 +1,4 @@
-import { FiMapPin, FiCheckCircle, FiTarget, FiCompass, FiClock } from 'react-icons/fi';
+import { FiMapPin, FiCheckCircle, FiTarget, FiCompass, FiClock, FiCalendar } from 'react-icons/fi';
 import { FaPiggyBank } from 'react-icons/fa';
 
 export default function StatsBar({ monthlyDates, longTermDates, cityTrips = [], activeTab }) {
@@ -80,9 +80,13 @@ export default function StatsBar({ monthlyDates, longTermDates, cityTrips = [], 
 
   const stats = [
     {
-      label: 'Total Destinasi',
+      label: activeTab === 'monthly' ? 'Total Rencana Date' : 'Total Destinasi Impian',
       value: total,
-      icon: <FiMapPin className="w-4 h-4 sm:w-5 sm:h-5" />,
+      icon: activeTab === 'monthly' ? (
+        <FiCalendar className="w-4 h-4 sm:w-5 sm:h-5" />
+      ) : (
+        <FiTarget className="w-4 h-4 sm:w-5 sm:h-5" />
+      ),
       bgColor: 'bg-blue-50',
       textColor: 'text-blue-600',
     },
@@ -96,7 +100,7 @@ export default function StatsBar({ monthlyDates, longTermDates, cityTrips = [], 
     {
       label: 'Belum Dikunjungi',
       value: notVisited,
-      icon: <FiTarget className="w-4 h-4 sm:w-5 sm:h-5" />,
+      icon: <FiClock className="w-4 h-4 sm:w-5 sm:h-5" />,
       bgColor: 'bg-amber-50',
       textColor: 'text-amber-600',
     },

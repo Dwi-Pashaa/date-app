@@ -1,13 +1,19 @@
-import { useState, useEffect } from 'react';
-import { FiX, FiMapPin, FiCalendar, FiFileText } from 'react-icons/fi';
-import ImageUploadInput from './ImageUploadInput';
+import { useState, useEffect } from "react";
+import {
+  FiX,
+  FiMapPin,
+  FiCalendar,
+  FiFileText,
+  FiCompass,
+} from "react-icons/fi";
+import ImageUploadInput from "./ImageUploadInput";
 
 const emptyForm = {
-  cityName: '',
-  startDate: '',
-  endDate: '',
-  notes: '',
-  coverUrl: '',
+  cityName: "",
+  startDate: "",
+  endDate: "",
+  notes: "",
+  coverUrl: "",
 };
 
 export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
@@ -17,11 +23,11 @@ export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
   useEffect(() => {
     if (editCity) {
       setForm({
-        cityName: editCity.cityName || '',
-        startDate: editCity.startDate || '',
-        endDate: editCity.endDate || '',
-        notes: editCity.notes || '',
-        coverUrl: editCity.coverUrl || '',
+        cityName: editCity.cityName || "",
+        startDate: editCity.startDate || "",
+        endDate: editCity.endDate || "",
+        notes: editCity.notes || "",
+        coverUrl: editCity.coverUrl || "",
       });
     } else {
       setForm(emptyForm);
@@ -46,7 +52,7 @@ export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
     onSave({
       ...form,
       endDate: form.endDate || form.startDate,
-      coverUrl: form.coverUrl || '',
+      coverUrl: form.coverUrl || "",
       destinations: editCity ? editCity.destinations : [],
     });
   };
@@ -61,7 +67,7 @@ export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-extrabold text-lg sm:text-xl">
-                {isEdit ? 'Edit Kota Tujuan Kita' : 'Tambah Kota Tujuan Kita'}
+                {isEdit ? "Edit Kota Tujuan Kita" : "Tambah Kota Tujuan Kita"}
               </h3>
               <p className="text-blue-100 text-xs mt-0.5">
                 Rencanakan jadwal perjalanan dan tempat yang ingin kita kunjungi
@@ -82,7 +88,7 @@ export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
           {/* Nama Kota */}
           <div>
             <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              <FiMapPin className="w-3.5 h-3.5 text-blue-600" />
+              <FiCompass className="w-3.5 h-3.5 text-blue-600" />
               Nama Kota / Judul Trip
             </label>
             <input
@@ -142,7 +148,10 @@ export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
           <div>
             <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
               <FiFileText className="w-3.5 h-3.5 text-slate-500" />
-              Catatan Trip Kita <span className="text-slate-400 font-normal normal-case">(opsional)</span>
+              Catatan Trip Kita{" "}
+              <span className="text-slate-400 font-normal normal-case">
+                (opsional)
+              </span>
             </label>
             <textarea
               name="notes"
@@ -168,11 +177,15 @@ export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
               disabled={uploading}
               className={`flex-1 py-3 px-4 font-bold text-sm rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 ${
                 uploading
-                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/20'
+                  ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                  : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/20"
               }`}
             >
-              {uploading ? 'Sedang Mengunggah Foto...' : isEdit ? 'Simpan Perubahan' : 'Buat Trip Kota'}
+              {uploading
+                ? "Sedang Mengunggah Foto..."
+                : isEdit
+                  ? "Simpan Perubahan"
+                  : "Buat Trip Kota"}
             </button>
           </div>
         </form>

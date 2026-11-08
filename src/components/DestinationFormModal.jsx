@@ -1,34 +1,47 @@
-import { useState, useEffect } from 'react';
-import { FiX, FiMapPin, FiClock, FiCalendar, FiLink, FiTarget } from 'react-icons/fi';
-import ImageUploadInput from './ImageUploadInput';
+import { useState, useEffect } from "react";
+import {
+  FiX,
+  FiMapPin,
+  FiClock,
+  FiCalendar,
+  FiLink,
+  FiCompass,
+} from "react-icons/fi";
+import ImageUploadInput from "./ImageUploadInput";
 
 const emptyDestForm = {
-  placeName: '',
-  time: '',
-  date: '',
-  location: '',
-  locationUrl: '',
-  imageUrl: '',
+  placeName: "",
+  time: "",
+  date: "",
+  location: "",
+  locationUrl: "",
+  imageUrl: "",
 };
 
-export default function DestinationFormModal({ isOpen, city, editDest, onSave, onClose }) {
+export default function DestinationFormModal({
+  isOpen,
+  city,
+  editDest,
+  onSave,
+  onClose,
+}) {
   const [form, setForm] = useState(emptyDestForm);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (editDest) {
       setForm({
-        placeName: editDest.placeName || '',
-        time: editDest.time || '',
-        date: editDest.date || city?.startDate || '',
-        location: editDest.location || '',
-        locationUrl: editDest.locationUrl || '',
-        imageUrl: editDest.imageUrl || '',
+        placeName: editDest.placeName || "",
+        time: editDest.time || "",
+        date: editDest.date || city?.startDate || "",
+        location: editDest.location || "",
+        locationUrl: editDest.locationUrl || "",
+        imageUrl: editDest.imageUrl || "",
       });
     } else {
       setForm({
         ...emptyDestForm,
-        date: city?.startDate || '',
+        date: city?.startDate || "",
       });
     }
   }, [editDest, city, isOpen]);
@@ -50,8 +63,8 @@ export default function DestinationFormModal({ isOpen, city, editDest, onSave, o
 
     onSave({
       ...form,
-      imageUrl: form.imageUrl || '',
-      id: editDest ? editDest.id : 'dest_' + Date.now(),
+      imageUrl: form.imageUrl || "",
+      id: editDest ? editDest.id : "dest_" + Date.now(),
       visited: editDest ? editDest.visited : false,
     });
   };
@@ -66,7 +79,7 @@ export default function DestinationFormModal({ isOpen, city, editDest, onSave, o
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-extrabold text-lg">
-                {isEdit ? 'Edit Destinasi' : 'Tambah Destinasi Baru'}
+                {isEdit ? "Edit Destinasi" : "Tambah Destinasi Baru"}
               </h3>
               <p className="text-blue-100 text-xs mt-0.5 truncate max-w-[240px]">
                 Di kota: {city?.cityName}
@@ -87,7 +100,7 @@ export default function DestinationFormModal({ isOpen, city, editDest, onSave, o
           {/* Nama Tempat */}
           <div>
             <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              <FiTarget className="w-3.5 h-3.5 text-blue-600" />
+              <FiCompass className="w-3.5 h-3.5 text-blue-600" />
               Nama Tempat / Aktivitas
             </label>
             <input
@@ -165,7 +178,10 @@ export default function DestinationFormModal({ isOpen, city, editDest, onSave, o
           <div>
             <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
               <FiLink className="w-3.5 h-3.5 text-blue-500" />
-              Link Google Maps <span className="text-slate-400 font-normal normal-case">(opsional)</span>
+              Link Google Maps{" "}
+              <span className="text-slate-400 font-normal normal-case">
+                (opsional)
+              </span>
             </label>
             <input
               type="url"
@@ -191,11 +207,15 @@ export default function DestinationFormModal({ isOpen, city, editDest, onSave, o
               disabled={uploading}
               className={`flex-1 py-2.5 px-4 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 ${
                 uploading
-                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20'
+                  ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                  : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20"
               }`}
             >
-              {uploading ? 'Sedang Mengunggah...' : isEdit ? 'Simpan' : 'Tambah Tempat'}
+              {uploading
+                ? "Sedang Mengunggah..."
+                : isEdit
+                  ? "Simpan"
+                  : "Tambah Tempat"}
             </button>
           </div>
         </form>

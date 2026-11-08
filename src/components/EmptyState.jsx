@@ -1,16 +1,16 @@
-import { FiHeart, FiPlus, FiCompass, FiMapPin } from 'react-icons/fi';
+import { FiHeart, FiPlus, FiCompass, FiCalendar, FiTarget } from 'react-icons/fi';
 
 export default function EmptyState({ type, onAddClick }) {
-  const isCities = type === 'cities';
-
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-white rounded-3xl border border-gray-100 shadow-sm max-w-lg mx-auto my-6">
       <div className="relative mb-5">
         <div className="w-20 h-20 bg-gradient-to-tr from-blue-50 to-indigo-100 rounded-3xl flex items-center justify-center shadow-inner">
-          {isCities ? (
-            <FiMapPin className="w-10 h-10 text-blue-600" />
-          ) : (
+          {type === 'cities' ? (
             <FiCompass className="w-10 h-10 text-blue-600" />
+          ) : type === 'longterm' ? (
+            <FiTarget className="w-10 h-10 text-blue-600" />
+          ) : (
+            <FiCalendar className="w-10 h-10 text-blue-600" />
           )}
         </div>
         <div className="absolute -bottom-1 -right-1 bg-pink-100 p-1.5 rounded-xl text-pink-500 shadow-sm">

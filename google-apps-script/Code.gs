@@ -2,20 +2,37 @@
  * ===================================================================
  * GOOGLE APPS SCRIPT - DATABASE LIST DATE KITA 💙
  * ===================================================================
- * Script ini digunakan sebagai backend API gratis untuk aplikasi List Date.
- * Script akan otomatis membuat 3 Tab:
- * 1. "MonthlyDates"  -> Date rutin bulanan
- * 2. "LongTermDates" -> Destinasi impian + target tabungan
- * 3. "CityTrips"     -> Kota tujuan + jadwal destinasi & jam kunjungan
+ * Script ini digunakan sebagai backend database realtime untuk web List Date.
+ * 
+ * SPREADSHEET AKAN MEMILIKI 3 TAB TERPISAH:
+ * 1. "MonthlyDates"  -> Daftar kencan / date rutin bulanan kita
+ * 2. "LongTermDates" -> Destinasi impian jangka panjang + progress tabungan
+ * 3. "KotaTujuan"    -> Rencana trip luar kota + jadwal destinasi & jam kunjungan
+ * ===================================================================
  */
 
+function formatCellDate(val) {
+  if (!val) return "";
+  if (val instanceof Date) {
+    var yyyy = val.getFullYear();
+    var mm = String(val.getMonth() + 1).padStart(2, '0');
+    var dd = String(val.getDate()).padStart(2, '0');
+    return yyyy + "-" + mm + "-" + dd;
+  }
+  var str = String(val).trim();
+  if (str.indexOf("T") !== -1) {
+    return str.split("T")[0];
+  }
+  return str;
+}
+
 function setupSheets(ss) {
-  // 1. Tab MonthlyDates
-  var monthlySheet = ss.getSheetByName("MonthlyDates");
+  // 1. Tab MonthlyDates (Date Bulanan)
+  var monthlySheet = ss.getSheetByName("MonthlyDates") || ss.getSheetByName("Bulanan");
   if (!monthlySheet) {
     monthlySheet = ss.insertSheet("MonthlyDates");
     monthlySheet.appendRow(["id", "name", "date", "location", "locationUrl", "visited"]);
-    monthlySheet.getRange("A1:F1").setFontWeight("bold").setBackground("#dbeafe");
+    monthlySheet.getRange("A1:F1").setFontWeight("bold").setBackground("#dbeafe").setHorizontalAlignment("center");
     monthlySheet.appendRow([
       "m_1",
       "Dinner Romantis di Resto ABC",
@@ -34,12 +51,12 @@ function setupSheets(ss) {
     ]);
   }
 
-  // 2. Tab LongTermDates
-  var longTermSheet = ss.getSheetByName("LongTermDates");
+  // 2. Tab LongTermDates (Jangka Panjang)
+  var longTermSheet = ss.getSheetByName("LongTermDates") || ss.getSheetByName("JangkaPanjang");
   if (!longTermSheet) {
     longTermSheet = ss.insertSheet("LongTermDates");
     longTermSheet.appendRow(["id", "name", "date", "location", "locationUrl", "visited", "savingsTarget", "savedAmount"]);
-    longTermSheet.getRange("A1:H1").setFontWeight("bold").setBackground("#ede9fe");
+    longTermSheet.getRange("A1:H1").setFontWeight("bold").setBackground("#ede9fe").setHorizontalAlignment("center");
     longTermSheet.appendRow([
       "lt_1",
       "Trip ke Bali",
@@ -62,12 +79,12 @@ function setupSheets(ss) {
     ]);
   }
 
-  // 3. Tab CityTrips (Fitur Kota Tujuan & Itinerary)
-  var citySheet = ss.getSheetByName("CityTrips");
+  // 3. Tab KotaTujuan (TAB TERPISAH KHUSUS KOTA TUJUAN & DESTINASI)
+  var citySheet = ss.getSheetByName("KotaTujuan") || ss.getSheetByName("CityTrips");
   if (!citySheet) {
-    citySheet = ss.insertSheet("CityTrips");
+    citySheet = ss.insertSheet("KotaTujuan");
     citySheet.appendRow(["id", "cityName", "startDate", "endDate", "notes", "destinations"]);
-    citySheet.getRange("A1:F1").setFontWeight("bold").setBackground("#cffafe");
+    citySheet.getRange("A1:F1").setFontWeight("bold").setBackground("#cffafe").setHorizontalAlignment("center");
     citySheet.appendRow([
       "city_1",
       "Bandung Romantis",
@@ -114,6 +131,7 @@ function setupSheets(ss) {
 }
 
 function getDataFromSheet(sheet) {
+  if (!sheet) return [];
   var rows = sheet.getDataRange().getValues();
   if (rows.length <= 1) return [];
   
@@ -138,11 +156,8 @@ function getDataFromSheet(sheet) {
         } catch(e) {
           item[key] = [];
         }
-      } else if ((key === "date" || key === "startDate" || key === "endDate") && val instanceof Date) {
-        var yyyy = val.getFullYear();
-        var mm = String(val.getMonth() + 1).padStart(2, '0');
-        var dd = String(val.getDate()).padStart(2, '0');
-        item[key] = yyyy + "-" + mm + "-" + dd;
+      } else if (key === "date" || key === "startDate" || key === "endDate") {
+        item[key] = formatCellDate(val);
       } else {
         item[key] = val;
       }
@@ -153,7 +168,7 @@ function getDataFromSheet(sheet) {
 }
 
 /**
- * Handle GET Request: Mengambil data
+ * Handle GET Request: Mengambil data 3 Tab secara otomatis
  */
 function doGet(e) {
   try {
@@ -169,7 +184,8 @@ function doGet(e) {
       message: "Koneksi Google Spreadsheet Berhasil! 💙",
       monthlyDates: monthly,
       longTermDates: longTerm,
-      cityTrips: cities
+      cityTrips: cities,
+      kotaTujuan: cities // Alias agar kompatibel
     };
 
     return ContentService.createTextOutput(JSON.stringify(result))
@@ -193,53 +209,55 @@ function doPost(e) {
     var content = e.postData.contents;
     var params = JSON.parse(content);
     var action = params.action; // 'add' | 'update' | 'delete'
-    var type = params.type;     // 'monthlyDates' | 'longTermDates' | 'cityTrips'
+    var type = params.type;     // 'monthlyDates' | 'longTermDates' | 'cityTrips' | 'kotaTujuan'
     var item = params.data || {};
 
     var targetSheet;
-    if (type === "monthlyDates") {
+    if (type === "monthlyDates" || type === "monthly" || type === "bulanan") {
       targetSheet = sheets.monthlySheet;
-    } else if (type === "longTermDates") {
+    } else if (type === "longTermDates" || type === "longTerm" || type === "jangkaPanjang") {
       targetSheet = sheets.longTermSheet;
-    } else if (type === "cityTrips") {
+    } else if (type === "cityTrips" || type === "cities" || type === "kotaTujuan") {
       targetSheet = sheets.citySheet;
     }
 
     if (!targetSheet) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Tab tidak valid" }))
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Tab tidak valid: " + type }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
     var rows = targetSheet.getDataRange().getValues();
 
+    // 1. TAMBAH DATA
     if (action === "add") {
       var newId = item.id || Date.now().toString();
-      if (type === "monthlyDates") {
+      if (type === "monthlyDates" || type === "monthly" || type === "bulanan") {
         targetSheet.appendRow([
           newId,
           item.name || "",
-          item.date || "",
+          formatCellDate(item.date),
           item.location || "",
           item.locationUrl || "",
           Boolean(item.visited)
         ]);
-      } else if (type === "longTermDates") {
+      } else if (type === "longTermDates" || type === "longTerm" || type === "jangkaPanjang") {
         targetSheet.appendRow([
           newId,
           item.name || "",
-          item.date || "",
+          formatCellDate(item.date),
           item.location || "",
           item.locationUrl || "",
           Boolean(item.visited),
           Number(item.savingsTarget) || 0,
           Number(item.savedAmount) || 0
         ]);
-      } else if (type === "cityTrips") {
+      } else {
+        // Tab KotaTujuan
         targetSheet.appendRow([
           newId,
           item.cityName || "",
-          item.startDate || "",
-          item.endDate || "",
+          formatCellDate(item.startDate),
+          formatCellDate(item.endDate),
           item.notes || "",
           JSON.stringify(item.destinations || [])
         ]);
@@ -248,43 +266,45 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // 2. UPDATE DATA
     if (action === "update") {
       var targetId = String(item.id);
       var rowIndex = -1;
       for (var i = 1; i < rows.length; i++) {
         if (String(rows[i][0]) === targetId) {
-          rowIndex = i + 1; // 1-based index
+          rowIndex = i + 1; // 1-based row index
           break;
         }
       }
 
       if (rowIndex !== -1) {
-        if (type === "monthlyDates") {
+        if (type === "monthlyDates" || type === "monthly" || type === "bulanan") {
           targetSheet.getRange(rowIndex, 1, 1, 6).setValues([[
             targetId,
             item.name || "",
-            item.date || "",
+            formatCellDate(item.date),
             item.location || "",
             item.locationUrl || "",
             Boolean(item.visited)
           ]]);
-        } else if (type === "longTermDates") {
+        } else if (type === "longTermDates" || type === "longTerm" || type === "jangkaPanjang") {
           targetSheet.getRange(rowIndex, 1, 1, 8).setValues([[
             targetId,
             item.name || "",
-            item.date || "",
+            formatCellDate(item.date),
             item.location || "",
             item.locationUrl || "",
             Boolean(item.visited),
             Number(item.savingsTarget) || 0,
             Number(item.savedAmount) || 0
           ]]);
-        } else if (type === "cityTrips") {
+        } else {
+          // Tab KotaTujuan
           targetSheet.getRange(rowIndex, 1, 1, 6).setValues([[
             targetId,
             item.cityName || "",
-            item.startDate || "",
-            item.endDate || "",
+            formatCellDate(item.startDate),
+            formatCellDate(item.endDate),
             item.notes || "",
             JSON.stringify(item.destinations || [])
           ]]);
@@ -292,10 +312,11 @@ function doPost(e) {
         return ContentService.createTextOutput(JSON.stringify({ status: "success", action: "update", id: targetId }))
           .setMimeType(ContentService.MimeType.JSON);
       }
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Item tidak ditemukan" }))
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Item tidak ditemukan: " + targetId }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // 3. HAPUS DATA
     if (action === "delete") {
       var delId = String(params.id || (item && item.id));
       for (var j = 1; j < rows.length; j++) {
@@ -305,7 +326,7 @@ function doPost(e) {
             .setMimeType(ContentService.MimeType.JSON);
         }
       }
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "ID tidak ditemukan" }))
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "ID tidak ditemukan untuk dihapus: " + delId }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 

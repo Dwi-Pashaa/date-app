@@ -47,14 +47,10 @@ export default function App() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [monthly, longTerm, cities] = await Promise.all([
-        api.getMonthlyDates(),
-        api.getLongTermDates(),
-        api.getCityTrips(),
-      ]);
-      setMonthlyDates(monthly);
-      setLongTermDates(longTerm);
-      setCityTrips(cities);
+      const data = await api.getAllData(true);
+      setMonthlyDates(data.monthlyDates);
+      setLongTermDates(data.longTermDates);
+      setCityTrips(data.cityTrips);
       setIsSheetsConnected(Boolean(api.getSheetsUrl()));
     } catch (err) {
       console.error('Gagal memuat data:', err);
@@ -68,14 +64,10 @@ export default function App() {
   const silentSync = useCallback(async () => {
     if (!api.getSheetsUrl()) return;
     try {
-      const [monthly, longTerm, cities] = await Promise.all([
-        api.getMonthlyDates(),
-        api.getLongTermDates(),
-        api.getCityTrips(),
-      ]);
-      setMonthlyDates(monthly);
-      setLongTermDates(longTerm);
-      setCityTrips(cities);
+      const data = await api.getAllData(false);
+      setMonthlyDates(data.monthlyDates);
+      setLongTermDates(data.longTermDates);
+      setCityTrips(data.cityTrips);
       setIsSheetsConnected(true);
     } catch {}
   }, []);

@@ -3,10 +3,18 @@
 
 // =========================================================================================
 // 📌 URL GOOGLE SPREADSHEET TERTANAM (EMBEDDED)
-// Masukkan URL Google Apps Script Web App kamu di sini agar tertanam permanen.
-// Siapapun yang membuka web dari HP / laptop mana pun akan langsung terhubung otomatis!
+// URL Google Apps Script Web App tersinkron otomatis untuk siapapun yang membuka web.
 // =========================================================================================
 export const EMBEDDED_SHEETS_URL = "https://script.google.com/macros/s/AKfycbw5rmxSF24QtEzafYUHSpp39bhT0uo2IBxqjFylJkBdH_xxvEJGmXngAmPWSPQElih3/exec";
+
+function normalizeDate(val) {
+  if (!val) return "";
+  const str = String(val).trim();
+  if (str.includes("T")) {
+    return str.split("T")[0];
+  }
+  return str;
+}
 
 const initialData = {
   monthlyDates: [
@@ -94,7 +102,7 @@ const initialData = {
   ]
 };
 
-// In-Memory Store (Murni di memori RAM aplikasi, TANPA localStorage)
+// In-Memory Store (Murni di RAM memori aplikasi, TANPA localStorage data)
 let memoryStore = {
   monthlyDates: JSON.parse(JSON.stringify(initialData.monthlyDates)),
   longTermDates: JSON.parse(JSON.stringify(initialData.longTermDates)),
@@ -110,10 +118,6 @@ if (typeof window !== 'undefined') {
   } catch {}
 }
 
-// Mendapatkan URL Google Sheets:
-// 1. Prioritas utama: URL yang tertanam langsung di kode (EMBEDDED_SHEETS_URL)
-// 2. Environment variable (.env: VITE_SHEETS_API_URL)
-// 3. Input dinamis dari pengguna
 export function getSheetsUrl() {
   if (EMBEDDED_SHEETS_URL && EMBEDDED_SHEETS_URL.trim()) {
     return EMBEDDED_SHEETS_URL.trim();
@@ -136,25 +140,47 @@ export function setSheetsUrl(url) {
   }
 }
 
-// Google Sheets Fetcher
-async function fetchGoogleSheets() {
+// In-flight fetch deduplicator & light cache
+let inFlightFetch = null;
+let lastFetchTimestamp = 0;
+let cachedSheetsResult = null;
+
+async function fetchGoogleSheets(force = false) {
   const url = getSheetsUrl();
   if (!url) return null;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-    const data = await res.json();
-    if (data.status === 'success') {
-      return data;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Gagal membaca Google Sheets:', err);
-    return null;
+
+  const now = Date.now();
+  if (!force && cachedSheetsResult && (now - lastFetchTimestamp < 2500)) {
+    return cachedSheetsResult;
   }
+
+  if (inFlightFetch) {
+    return inFlightFetch;
+  }
+
+  inFlightFetch = (async () => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      const data = await res.json();
+      if (data && data.status === 'success') {
+        cachedSheetsResult = data;
+        lastFetchTimestamp = Date.now();
+        return data;
+      }
+      return null;
+    } catch (err) {
+      console.warn('Gagal membaca Google Sheets:', err);
+      return null;
+    } finally {
+      inFlightFetch = null;
+    }
+  })();
+
+  return inFlightFetch;
 }
 
-// Mengirim aksi ke Google Sheets tanpa preflight CORS OPTIONS error
+// Mengirim aksi ke Google Sheets tanpa CORS preflight issue
 async function sendGoogleSheetsAction(action, type, payload) {
   const url = getSheetsUrl();
   if (!url) return false;
@@ -170,6 +196,9 @@ async function sendGoogleSheetsAction(action, type, payload) {
         ...(action === 'delete' ? { id: payload } : { data: payload }),
       }),
     });
+    // Invalidate cache setelah mutasi
+    cachedSheetsResult = null;
+    lastFetchTimestamp = 0;
     return true;
   } catch (err) {
     console.warn('Gagal sync ke Google Sheets:', err);
@@ -202,19 +231,49 @@ export const api = {
     }
   },
 
+  // Mengambil seluruh data (3 Tab) dalam 1 panggilan cepat
+  async getAllData(force = false) {
+    const sheetsData = await fetchGoogleSheets(force);
+    if (sheetsData) {
+      if (Array.isArray(sheetsData.monthlyDates)) {
+        memoryStore.monthlyDates = sheetsData.monthlyDates.map((item) => ({
+          ...item,
+          date: normalizeDate(item.date),
+        }));
+      }
+      if (Array.isArray(sheetsData.longTermDates)) {
+        memoryStore.longTermDates = sheetsData.longTermDates.map((item) => ({
+          ...item,
+          date: normalizeDate(item.date),
+        }));
+      }
+      const rawCities = sheetsData.kotaTujuan || sheetsData.cityTrips;
+      if (Array.isArray(rawCities)) {
+        memoryStore.cityTrips = rawCities.map((item) => ({
+          ...item,
+          startDate: normalizeDate(item.startDate),
+          endDate: normalizeDate(item.endDate),
+          destinations: Array.isArray(item.destinations) ? item.destinations : [],
+        }));
+      }
+    }
+    return {
+      monthlyDates: memoryStore.monthlyDates,
+      longTermDates: memoryStore.longTermDates,
+      cityTrips: memoryStore.cityTrips,
+    };
+  },
+
   // Monthly Dates
   async getMonthlyDates() {
-    const sheetsData = await fetchGoogleSheets();
-    if (sheetsData && Array.isArray(sheetsData.monthlyDates)) {
-      memoryStore.monthlyDates = sheetsData.monthlyDates;
-      return memoryStore.monthlyDates;
-    }
-    return memoryStore.monthlyDates;
+    const all = await this.getAllData();
+    return all.monthlyDates;
   },
 
   async addMonthlyDate(data) {
     const newItem = {
       ...data,
+      date: normalizeDate(data.date),
       id: 'm_' + Date.now(),
       createdAt: new Date().toISOString(),
     };
@@ -228,15 +287,19 @@ export const api = {
   },
 
   async updateMonthlyDate(id, data) {
+    const cleanData = {
+      ...data,
+      date: normalizeDate(data.date),
+    };
     memoryStore.monthlyDates = memoryStore.monthlyDates.map((item) =>
-      String(item.id) === String(id) ? { ...item, ...data, id } : item
+      String(item.id) === String(id) ? { ...item, ...cleanData, id } : item
     );
 
     if (getSheetsUrl()) {
-      sendGoogleSheetsAction('update', 'monthlyDates', { ...data, id });
+      sendGoogleSheetsAction('update', 'monthlyDates', { ...cleanData, id });
     }
 
-    return { ...data, id };
+    return { ...cleanData, id };
   },
 
   async deleteMonthlyDate(id) {
@@ -251,17 +314,14 @@ export const api = {
 
   // Long Term Dates
   async getLongTermDates() {
-    const sheetsData = await fetchGoogleSheets();
-    if (sheetsData && Array.isArray(sheetsData.longTermDates)) {
-      memoryStore.longTermDates = sheetsData.longTermDates;
-      return memoryStore.longTermDates;
-    }
-    return memoryStore.longTermDates;
+    const all = await this.getAllData();
+    return all.longTermDates;
   },
 
   async addLongTermDate(data) {
     const newItem = {
       ...data,
+      date: normalizeDate(data.date),
       id: 'lt_' + Date.now(),
       createdAt: new Date().toISOString(),
     };
@@ -275,15 +335,19 @@ export const api = {
   },
 
   async updateLongTermDate(id, data) {
+    const cleanData = {
+      ...data,
+      date: normalizeDate(data.date),
+    };
     memoryStore.longTermDates = memoryStore.longTermDates.map((item) =>
-      String(item.id) === String(id) ? { ...item, ...data, id } : item
+      String(item.id) === String(id) ? { ...item, ...cleanData, id } : item
     );
 
     if (getSheetsUrl()) {
-      sendGoogleSheetsAction('update', 'longTermDates', { ...data, id });
+      sendGoogleSheetsAction('update', 'longTermDates', { ...cleanData, id });
     }
 
-    return { ...data, id };
+    return { ...cleanData, id };
   },
 
   async deleteLongTermDate(id) {
@@ -296,42 +360,45 @@ export const api = {
     }
   },
 
-  // City Trips (Fitur Kota Tujuan & Itinerary)
+  // Kota Tujuan (Fitur Kota Tujuan & Destinasi - Tab Khusus)
   async getCityTrips() {
-    const sheetsData = await fetchGoogleSheets();
-    if (sheetsData && Array.isArray(sheetsData.cityTrips)) {
-      memoryStore.cityTrips = sheetsData.cityTrips;
-      return memoryStore.cityTrips;
-    }
-    return memoryStore.cityTrips;
+    const all = await this.getAllData();
+    return all.cityTrips;
   },
 
   async addCityTrip(data) {
     const newItem = {
       ...data,
       id: 'city_' + Date.now(),
+      startDate: normalizeDate(data.startDate),
+      endDate: normalizeDate(data.endDate),
       destinations: data.destinations || [],
       createdAt: new Date().toISOString(),
     };
     memoryStore.cityTrips = [newItem, ...memoryStore.cityTrips];
 
     if (getSheetsUrl()) {
-      sendGoogleSheetsAction('add', 'cityTrips', newItem);
+      sendGoogleSheetsAction('add', 'kotaTujuan', newItem);
     }
 
     return newItem;
   },
 
   async updateCityTrip(id, data) {
+    const cleanData = {
+      ...data,
+      startDate: normalizeDate(data.startDate),
+      endDate: normalizeDate(data.endDate),
+    };
     memoryStore.cityTrips = memoryStore.cityTrips.map((item) =>
-      String(item.id) === String(id) ? { ...item, ...data, id } : item
+      String(item.id) === String(id) ? { ...item, ...cleanData, id } : item
     );
 
     if (getSheetsUrl()) {
-      sendGoogleSheetsAction('update', 'cityTrips', { ...data, id });
+      sendGoogleSheetsAction('update', 'kotaTujuan', { ...cleanData, id });
     }
 
-    return { ...data, id };
+    return { ...cleanData, id };
   },
 
   async deleteCityTrip(id) {
@@ -340,7 +407,7 @@ export const api = {
     );
 
     if (getSheetsUrl()) {
-      sendGoogleSheetsAction('delete', 'cityTrips', id);
+      sendGoogleSheetsAction('delete', 'kotaTujuan', id);
     }
   },
 };

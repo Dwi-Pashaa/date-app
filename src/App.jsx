@@ -32,7 +32,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState('newest'); // Default: Yang terbaru di depan
   const [isSheetsConnected, setIsSheetsConnected] = useState(Boolean(api.getSheetsUrl()));
 
-  // Fetch data
+  // Fetch data awal
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -55,27 +55,36 @@ export default function App() {
     fetchData();
   }, [fetchData]);
 
-  // CRUD handlers
+  // CRUD handlers - REALTIME OPTIMISTIC UPDATE
   const handleSave = async (data) => {
     try {
       if (editItem) {
+        // Edit / Update Realtime
         if (activeTab === 'monthly') {
+          setMonthlyDates((prev) =>
+            prev.map((item) => (String(item.id) === String(editItem.id) ? { ...item, ...data } : item))
+          );
           await api.updateMonthlyDate(editItem.id, data);
         } else {
+          setLongTermDates((prev) =>
+            prev.map((item) => (String(item.id) === String(editItem.id) ? { ...item, ...data } : item))
+          );
           await api.updateLongTermDate(editItem.id, data);
         }
         setToast({ message: 'Destinasi kita berhasil diperbarui! ✏️', type: 'success' });
       } else {
+        // Tambah Baru Realtime (Langsung muncul di state detik itu juga!)
         if (activeTab === 'monthly') {
-          await api.addMonthlyDate(data);
+          const newItem = await api.addMonthlyDate(data);
+          setMonthlyDates((prev) => [newItem, ...prev.filter((it) => it.id !== newItem.id)]);
         } else {
-          await api.addLongTermDate(data);
+          const newItem = await api.addLongTermDate(data);
+          setLongTermDates((prev) => [newItem, ...prev.filter((it) => it.id !== newItem.id)]);
         }
         setToast({ message: 'Destinasi baru kita berhasil ditambahkan! 🎉', type: 'success' });
       }
       setShowForm(false);
       setEditItem(null);
-      fetchData();
     } catch (err) {
       console.error('Gagal menyimpan:', err);
       setToast({ message: 'Gagal menyimpan destinasi.', type: 'error' });
@@ -84,10 +93,13 @@ export default function App() {
 
   const handleSaveSavings = async (updatedItem) => {
     try {
-      await api.updateLongTermDate(updatedItem.id, updatedItem);
-      setToast({ message: 'Tabungan kita berhasil ditambahkan! 💰🎉', type: 'success' });
+      // Realtime update tabungan
+      setLongTermDates((prev) =>
+        prev.map((it) => (String(it.id) === String(updatedItem.id) ? updatedItem : it))
+      );
       setSavingsItem(null);
-      fetchData();
+      setToast({ message: 'Tabungan kita berhasil ditambahkan! 💰🎉', type: 'success' });
+      await api.updateLongTermDate(updatedItem.id, updatedItem);
     } catch (err) {
       console.error('Gagal memperbarui tabungan:', err);
       setToast({ message: 'Gagal menambahkan tabungan.', type: 'error' });
@@ -95,7 +107,6 @@ export default function App() {
   };
 
   const handleDelete = (item) => {
-    // Simpan objek lengkap item yang ingin dihapus
     setConfirmDelete({ item, tab: activeTab });
   };
 
@@ -106,14 +117,16 @@ export default function App() {
     const targetName = confirmDelete.item.name;
 
     try {
+      // Realtime hapus dari state UI seketika
       if (targetTab === 'monthly') {
+        setMonthlyDates((prev) => prev.filter((it) => String(it.id) !== String(targetId)));
         await api.deleteMonthlyDate(targetId);
       } else {
+        setLongTermDates((prev) => prev.filter((it) => String(it.id) !== String(targetId)));
         await api.deleteLongTermDate(targetId);
       }
       setToast({ message: `"${targetName}" berhasil dihapus! 🗑️`, type: 'success' });
       setConfirmDelete(null);
-      fetchData();
     } catch (err) {
       console.error('Gagal menghapus:', err);
       setToast({ message: 'Gagal menghapus data.', type: 'error' });
@@ -128,16 +141,22 @@ export default function App() {
   const handleToggleVisited = async (item) => {
     const updated = { ...item, visited: !item.visited };
     try {
+      // Realtime toggle status
       if (activeTab === 'monthly') {
+        setMonthlyDates((prev) =>
+          prev.map((it) => (String(it.id) === String(item.id) ? updated : it))
+        );
         await api.updateMonthlyDate(item.id, updated);
       } else {
+        setLongTermDates((prev) =>
+          prev.map((it) => (String(it.id) === String(item.id) ? updated : it))
+        );
         await api.updateLongTermDate(item.id, updated);
       }
       setToast({
         message: updated.visited ? 'Hore! Sudah kita kunjungi! 🎉' : 'Status diubah ke belum dikunjungi',
         type: 'success',
       });
-      fetchData();
     } catch (err) {
       console.error('Gagal mengubah status:', err);
     }

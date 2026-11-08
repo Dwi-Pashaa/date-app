@@ -99,8 +99,6 @@ async function fetchGoogleSheets() {
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
     const data = await res.json();
     if (data.status === 'success') {
-      if (Array.isArray(data.monthlyDates)) setLocal('monthlyDates', data.monthlyDates);
-      if (Array.isArray(data.longTermDates)) setLocal('longTermDates', data.longTermDates);
       return data;
     }
     return null;
@@ -160,11 +158,17 @@ export const api = {
 
   // Monthly Dates
   async getMonthlyDates() {
+    const local = getLocal('monthlyDates');
     const sheetsData = await fetchGoogleSheets();
     if (sheetsData && Array.isArray(sheetsData.monthlyDates)) {
-      return sheetsData.monthlyDates;
+      // Gabungkan data sheets dengan data lokal yang baru ditambahkan
+      const sheetsIds = new Set(sheetsData.monthlyDates.map((d) => String(d.id)));
+      const pendingLocal = local.filter((d) => !sheetsIds.has(String(d.id)));
+      const merged = [...pendingLocal, ...sheetsData.monthlyDates];
+      setLocal('monthlyDates', merged);
+      return merged;
     }
-    return getLocal('monthlyDates');
+    return local;
   },
 
   async addMonthlyDate(data) {
@@ -211,11 +215,16 @@ export const api = {
 
   // Long Term Dates
   async getLongTermDates() {
+    const local = getLocal('longTermDates');
     const sheetsData = await fetchGoogleSheets();
     if (sheetsData && Array.isArray(sheetsData.longTermDates)) {
-      return sheetsData.longTermDates;
+      const sheetsIds = new Set(sheetsData.longTermDates.map((d) => String(d.id)));
+      const pendingLocal = local.filter((d) => !sheetsIds.has(String(d.id)));
+      const merged = [...pendingLocal, ...sheetsData.longTermDates];
+      setLocal('longTermDates', merged);
+      return merged;
     }
-    return getLocal('longTermDates');
+    return local;
   },
 
   async addLongTermDate(data) {

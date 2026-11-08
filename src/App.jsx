@@ -8,6 +8,7 @@ import FilterBar from './components/FilterBar';
 import DateCard from './components/DateCard';
 import DateForm from './components/DateForm';
 import SavingsModal from './components/SavingsModal';
+import GoogleSheetsModal from './components/GoogleSheetsModal';
 import EmptyState from './components/EmptyState';
 import LoadingSpinner from './components/LoadingSpinner';
 import Toast from './components/Toast';
@@ -21,6 +22,7 @@ export default function App() {
   const [longTermDates, setLongTermDates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showSheetsModal, setShowSheetsModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [savingsItem, setSavingsItem] = useState(null);
   const [toast, setToast] = useState(null);
@@ -28,6 +30,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('date-asc');
+  const [isSheetsConnected, setIsSheetsConnected] = useState(Boolean(api.getSheetsUrl()));
 
   // Fetch data
   const fetchData = useCallback(async () => {
@@ -39,9 +42,10 @@ export default function App() {
       ]);
       setMonthlyDates(monthly);
       setLongTermDates(longTerm);
+      setIsSheetsConnected(Boolean(api.getSheetsUrl()));
     } catch (err) {
       console.error('Gagal memuat data:', err);
-      setToast({ message: 'Gagal memuat data. Pastikan json-server berjalan.', type: 'error' });
+      setToast({ message: 'Gagal memuat data.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -177,7 +181,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-700">
-      <Header />
+      <Header
+        onOpenSheetsModal={() => setShowSheetsModal(true)}
+        isSheetsConnected={isSheetsConnected}
+      />
 
       <main className="max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1">
         {/* Stats Bar */}
@@ -219,6 +226,9 @@ export default function App() {
             onSearchChange={setSearchQuery}
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            isLongTerm={activeTab === 'longterm'}
           />
         )}
 
@@ -290,6 +300,18 @@ export default function App() {
           onClose={() => setSavingsItem(null)}
         />
       )}
+
+      {/* Google Sheets Modal */}
+      <GoogleSheetsModal
+        isOpen={showSheetsModal}
+        onClose={() => setShowSheetsModal(false)}
+        onConnected={() => {
+          setIsSheetsConnected(Boolean(api.getSheetsUrl()));
+          setShowSheetsModal(false);
+          fetchData();
+          setToast({ message: 'Data Google Spreadsheet berhasil disinkronkan! 📊💙', type: 'success' });
+        }}
+      />
 
       {/* Confirm Delete */}
       {confirmDelete && (

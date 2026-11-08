@@ -1,6 +1,7 @@
 // Smart API:
-// - Di lokal (localhost): Bisa terhubung ke json-server jika aktif, atau fallback ke localStorage.
-// - Di Vercel / Cloud: 100% menggunakan localStorage secara mandiri tanpa memicu error 405.
+// 1. Google Spreadsheet (Apps Script Web App) jika URL telah dikonfigurasi (Data Cloud Permanen).
+// 2. Lokal json-server (jika di localhost dan server aktif).
+// 3. Fallback browser localStorage (jika belum menghubungkan spreadsheet).
 
 const initialData = {
   monthlyDates: [
@@ -45,11 +46,22 @@ const initialData = {
   ]
 };
 
-// Cek apakah berjalan di localhost
-function isLocalhost() {
-  if (typeof window === 'undefined') return false;
-  const host = window.location.hostname;
-  return host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.');
+// URL Google Sheets dari localStorage atau .env
+export function getSheetsUrl() {
+  if (typeof window === 'undefined') return '';
+  const stored = localStorage.getItem('list_date_sheets_url');
+  if (stored && stored.trim()) return stored.trim();
+  const envUrl = import.meta.env.VITE_SHEETS_API_URL;
+  return envUrl ? envUrl.trim() : '';
+}
+
+export function setSheetsUrl(url) {
+  if (typeof window === 'undefined') return;
+  if (!url || !url.trim()) {
+    localStorage.removeItem('list_date_sheets_url');
+  } else {
+    localStorage.setItem('list_date_sheets_url', url.trim());
+  }
 }
 
 // LocalStorage helpers
@@ -72,174 +84,229 @@ function setLocal(key, data) {
   }
 }
 
-let backendChecked = false;
-let backendAvailable = false;
+function isLocalhost() {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.');
+}
 
-async function checkBackend() {
-  // Jika di Vercel (bukan localhost), langsung gunakan localStorage
-  if (!isLocalhost()) return false;
-  if (backendChecked) return backendAvailable;
-
+// Google Sheets Fetchers
+async function fetchGoogleSheets() {
+  const url = getSheetsUrl();
+  if (!url) return null;
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1000);
-    const res = await fetch('/api/monthlyDates', { signal: controller.signal });
-    clearTimeout(timeout);
-    
-    const contentType = res.headers.get('content-type');
-    // Harus respon 200 dan benar-benar JSON (bukan HTML dari Vercel/Vite fallback)
-    if (res.ok && contentType && contentType.includes('application/json')) {
-      backendAvailable = true;
-    } else {
-      backendAvailable = false;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    const data = await res.json();
+    if (data.status === 'success') {
+      // Simpan cache lokal
+      if (Array.isArray(data.monthlyDates)) setLocal('monthlyDates', data.monthlyDates);
+      if (Array.isArray(data.longTermDates)) setLocal('longTermDates', data.longTermDates);
+      return data;
     }
-  } catch {
-    backendAvailable = false;
+    return null;
+  } catch (err) {
+    console.warn('Gagal membaca Google Sheets, memakai data lokal:', err);
+    return null;
   }
-  backendChecked = true;
-  return backendAvailable;
+}
+
+// Mengirim aksi ke Google Sheets tanpa preflight CORS OPTIONS error
+async function sendGoogleSheetsAction(action, type, payload) {
+  const url = getSheetsUrl();
+  if (!url) return false;
+  try {
+    // text/plain;charset=utf-8 mencegah browser mengirim preflight OPTIONS
+    await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify({
+        action,
+        type,
+        ...(action === 'delete' ? { id: payload } : { data: payload }),
+      }),
+    });
+    return true;
+  } catch (err) {
+    console.warn('Gagal sync ke Google Sheets:', err);
+    return false;
+  }
 }
 
 export const api = {
+  getSheetsUrl,
+  setSheetsUrl,
+
+  async testConnection(urlToTest) {
+    if (!urlToTest || !urlToTest.startsWith('http')) {
+      throw new Error('URL tidak valid. Pastikan diawali https://script.google.com/...');
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetch(urlToTest, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!res.ok) throw new Error(`Respon server error (${res.status})`);
+      const data = await res.json();
+      if (data.status !== 'success') {
+        throw new Error(data.message || 'Respon Google Sheets tidak sesuai format.');
+      }
+      return data;
+    } catch (err) {
+      clearTimeout(timeout);
+      throw err;
+    }
+  },
+
   // Monthly Dates
   async getMonthlyDates() {
-    if (await checkBackend()) {
+    const sheetsData = await fetchGoogleSheets();
+    if (sheetsData && Array.isArray(sheetsData.monthlyDates)) {
+      return sheetsData.monthlyDates;
+    }
+
+    // Cek json-server lokal jika di localhost
+    if (isLocalhost()) {
       try {
         const res = await fetch('/api/monthlyDates');
-        if (res.ok) {
-          const contentType = res.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            return await res.json();
-          }
+        if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+          return await res.json();
         }
-      } catch (err) {
-        console.warn('Backend fetch error, fallback to localStorage', err);
-      }
+      } catch {}
     }
+
     return getLocal('monthlyDates');
   },
 
   async addMonthlyDate(data) {
-    if (await checkBackend()) {
-      try {
-        const res = await fetch('/api/monthlyDates', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        });
-        if (res.ok) return await res.json();
-      } catch (err) {
-        console.warn('Backend add error, fallback to localStorage', err);
-      }
-    }
     const current = getLocal('monthlyDates');
-    const newItem = { ...data, id: Date.now() };
+    const newItem = { ...data, id: Date.now().toString() };
     const updated = [newItem, ...current];
     setLocal('monthlyDates', updated);
+
+    // Sync ke Google Sheets di background
+    if (getSheetsUrl()) {
+      sendGoogleSheetsAction('add', 'monthlyDates', newItem);
+    } else if (isLocalhost()) {
+      try {
+        await fetch('/api/monthlyDates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newItem),
+        });
+      } catch {}
+    }
+
     return newItem;
   },
 
   async updateMonthlyDate(id, data) {
-    if (await checkBackend()) {
+    const current = getLocal('monthlyDates');
+    const updated = current.map((item) => (String(item.id) === String(id) ? { ...data, id } : item));
+    setLocal('monthlyDates', updated);
+
+    if (getSheetsUrl()) {
+      sendGoogleSheetsAction('update', 'monthlyDates', { ...data, id });
+    } else if (isLocalhost()) {
       try {
-        const res = await fetch(`/api/monthlyDates/${id}`, {
+        await fetch(`/api/monthlyDates/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         });
-        if (res.ok) return await res.json();
-      } catch (err) {
-        console.warn('Backend update error, fallback to localStorage', err);
-      }
+      } catch {}
     }
-    const current = getLocal('monthlyDates');
-    const updated = current.map((item) => (item.id === id ? { ...data, id } : item));
-    setLocal('monthlyDates', updated);
+
     return { ...data, id };
   },
 
   async deleteMonthlyDate(id) {
-    if (await checkBackend()) {
-      try {
-        const res = await fetch(`/api/monthlyDates/${id}`, { method: 'DELETE' });
-        if (res.ok) return;
-      } catch (err) {
-        console.warn('Backend delete error, fallback to localStorage', err);
-      }
-    }
     const current = getLocal('monthlyDates');
-    const updated = current.filter((item) => item.id !== id);
+    const updated = current.filter((item) => String(item.id) !== String(id));
     setLocal('monthlyDates', updated);
+
+    if (getSheetsUrl()) {
+      sendGoogleSheetsAction('delete', 'monthlyDates', id);
+    } else if (isLocalhost()) {
+      try {
+        await fetch(`/api/monthlyDates/${id}`, { method: 'DELETE' });
+      } catch {}
+    }
   },
 
   // Long Term Dates
   async getLongTermDates() {
-    if (await checkBackend()) {
+    const sheetsData = await fetchGoogleSheets();
+    if (sheetsData && Array.isArray(sheetsData.longTermDates)) {
+      return sheetsData.longTermDates;
+    }
+
+    if (isLocalhost()) {
       try {
         const res = await fetch('/api/longTermDates');
-        if (res.ok) {
-          const contentType = res.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            return await res.json();
-          }
+        if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+          return await res.json();
         }
-      } catch (err) {
-        console.warn('Backend fetch error, fallback to localStorage', err);
-      }
+      } catch {}
     }
+
     return getLocal('longTermDates');
   },
 
   async addLongTermDate(data) {
-    if (await checkBackend()) {
-      try {
-        const res = await fetch('/api/longTermDates', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        });
-        if (res.ok) return await res.json();
-      } catch (err) {
-        console.warn('Backend add error, fallback to localStorage', err);
-      }
-    }
     const current = getLocal('longTermDates');
-    const newItem = { ...data, id: Date.now() };
+    const newItem = { ...data, id: Date.now().toString() };
     const updated = [newItem, ...current];
     setLocal('longTermDates', updated);
+
+    if (getSheetsUrl()) {
+      sendGoogleSheetsAction('add', 'longTermDates', newItem);
+    } else if (isLocalhost()) {
+      try {
+        await fetch('/api/longTermDates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newItem),
+        });
+      } catch {}
+    }
+
     return newItem;
   },
 
   async updateLongTermDate(id, data) {
-    if (await checkBackend()) {
+    const current = getLocal('longTermDates');
+    const updated = current.map((item) => (String(item.id) === String(id) ? { ...data, id } : item));
+    setLocal('longTermDates', updated);
+
+    if (getSheetsUrl()) {
+      sendGoogleSheetsAction('update', 'longTermDates', { ...data, id });
+    } else if (isLocalhost()) {
       try {
-        const res = await fetch(`/api/longTermDates/${id}`, {
+        await fetch(`/api/longTermDates/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         });
-        if (res.ok) return await res.json();
-      } catch (err) {
-        console.warn('Backend update error, fallback to localStorage', err);
-      }
+      } catch {}
     }
-    const current = getLocal('longTermDates');
-    const updated = current.map((item) => (item.id === id ? { ...data, id } : item));
-    setLocal('longTermDates', updated);
+
     return { ...data, id };
   },
 
   async deleteLongTermDate(id) {
-    if (await checkBackend()) {
-      try {
-        const res = await fetch(`/api/longTermDates/${id}`, { method: 'DELETE' });
-        if (res.ok) return;
-      } catch (err) {
-        console.warn('Backend delete error, fallback to localStorage', err);
-      }
-    }
     const current = getLocal('longTermDates');
-    const updated = current.filter((item) => item.id !== id);
+    const updated = current.filter((item) => String(item.id) !== String(id));
     setLocal('longTermDates', updated);
+
+    if (getSheetsUrl()) {
+      sendGoogleSheetsAction('delete', 'longTermDates', id);
+    } else if (isLocalhost()) {
+      try {
+        await fetch(`/api/longTermDates/${id}`, { method: 'DELETE' });
+      } catch {}
+    }
   },
 };

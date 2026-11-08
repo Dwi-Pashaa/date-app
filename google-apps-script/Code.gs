@@ -3,19 +3,21 @@
  * GOOGLE APPS SCRIPT - DATABASE LIST DATE KITA 💙
  * ===================================================================
  * Script ini digunakan sebagai backend API gratis untuk aplikasi List Date.
- * Script akan otomatis membuat Tab "MonthlyDates" dan "LongTermDates"
- * jika belum ada di spreadsheet kamu.
+ * Script akan otomatis membuat 3 Tab:
+ * 1. "MonthlyDates"  -> Date rutin bulanan
+ * 2. "LongTermDates" -> Destinasi impian + target tabungan
+ * 3. "CityTrips"     -> Kota tujuan + jadwal destinasi & jam kunjungan
  */
 
 function setupSheets(ss) {
+  // 1. Tab MonthlyDates
   var monthlySheet = ss.getSheetByName("MonthlyDates");
   if (!monthlySheet) {
     monthlySheet = ss.insertSheet("MonthlyDates");
     monthlySheet.appendRow(["id", "name", "date", "location", "locationUrl", "visited"]);
     monthlySheet.getRange("A1:F1").setFontWeight("bold").setBackground("#dbeafe");
-    // Seed initial sample
     monthlySheet.appendRow([
-      "1",
+      "m_1",
       "Dinner Romantis di Resto ABC",
       "2026-12-15",
       "Resto ABC, Jakarta Selatan",
@@ -23,7 +25,7 @@ function setupSheets(ss) {
       false
     ]);
     monthlySheet.appendRow([
-      "2",
+      "m_2",
       "Piknik di Taman Mini",
       "2026-12-20",
       "Taman Mini Indonesia Indah",
@@ -32,14 +34,14 @@ function setupSheets(ss) {
     ]);
   }
 
+  // 2. Tab LongTermDates
   var longTermSheet = ss.getSheetByName("LongTermDates");
   if (!longTermSheet) {
     longTermSheet = ss.insertSheet("LongTermDates");
     longTermSheet.appendRow(["id", "name", "date", "location", "locationUrl", "visited", "savingsTarget", "savedAmount"]);
     longTermSheet.getRange("A1:H1").setFontWeight("bold").setBackground("#ede9fe");
-    // Seed initial sample
     longTermSheet.appendRow([
-      "1",
+      "lt_1",
       "Trip ke Bali",
       "2027-06-01",
       "Bali, Indonesia",
@@ -49,7 +51,7 @@ function setupSheets(ss) {
       2000000
     ]);
     longTermSheet.appendRow([
-      "2",
+      "lt_2",
       "Liburan ke Jepang",
       "2027-12-01",
       "Tokyo, Jepang",
@@ -60,7 +62,55 @@ function setupSheets(ss) {
     ]);
   }
 
-  return { monthlySheet: monthlySheet, longTermSheet: longTermSheet };
+  // 3. Tab CityTrips (Fitur Kota Tujuan & Itinerary)
+  var citySheet = ss.getSheetByName("CityTrips");
+  if (!citySheet) {
+    citySheet = ss.insertSheet("CityTrips");
+    citySheet.appendRow(["id", "cityName", "startDate", "endDate", "notes", "destinations"]);
+    citySheet.getRange("A1:F1").setFontWeight("bold").setBackground("#cffafe");
+    citySheet.appendRow([
+      "city_1",
+      "Bandung Romantis",
+      "2026-12-25",
+      "2026-12-27",
+      "Liburan akhir pekan & keliling cafe estetik berdua 🚙",
+      JSON.stringify([
+        {
+          id: "dest_1",
+          placeName: "Sarapan di Roti Macan",
+          location: "Jl. Buah Batu, Bandung",
+          locationUrl: "https://maps.google.com/?q=Roti+Macan+Bandung",
+          date: "2026-12-25",
+          time: "08:30",
+          visited: false
+        },
+        {
+          id: "dest_2",
+          placeName: "Kawah Putih Ciwidey",
+          location: "Sugihmukti, Pasirjambu, Bandung",
+          locationUrl: "https://maps.google.com/?q=Kawah+Putih+Ciwidey",
+          date: "2026-12-25",
+          time: "11:00",
+          visited: false
+        },
+        {
+          id: "dest_3",
+          placeName: "Dinner Romantis The Valley Bistro",
+          location: "Jl. Lembah Pakar Timur No. 28, Dago",
+          locationUrl: "https://maps.google.com/?q=The+Valley+Bistro+Cafe+Bandung",
+          date: "2026-12-25",
+          time: "19:00",
+          visited: false
+        }
+      ])
+    ]);
+  }
+
+  return {
+    monthlySheet: monthlySheet,
+    longTermSheet: longTermSheet,
+    citySheet: citySheet
+  };
 }
 
 function getDataFromSheet(sheet) {
@@ -82,7 +132,13 @@ function getDataFromSheet(sheet) {
         item[key] = (val === true || String(val).toLowerCase() === "true");
       } else if (key === "savingsTarget" || key === "savedAmount") {
         item[key] = Number(val) || 0;
-      } else if (key === "date" && val instanceof Date) {
+      } else if (key === "destinations") {
+        try {
+          item[key] = typeof val === "string" ? JSON.parse(val) : val;
+        } catch(e) {
+          item[key] = [];
+        }
+      } else if ((key === "date" || key === "startDate" || key === "endDate") && val instanceof Date) {
         var yyyy = val.getFullYear();
         var mm = String(val.getMonth() + 1).padStart(2, '0');
         var dd = String(val.getDate()).padStart(2, '0');
@@ -106,12 +162,14 @@ function doGet(e) {
 
     var monthly = getDataFromSheet(sheets.monthlySheet);
     var longTerm = getDataFromSheet(sheets.longTermSheet);
+    var cities = getDataFromSheet(sheets.citySheet);
 
     var result = {
       status: "success",
       message: "Koneksi Google Spreadsheet Berhasil! 💙",
       monthlyDates: monthly,
-      longTermDates: longTerm
+      longTermDates: longTerm,
+      cityTrips: cities
     };
 
     return ContentService.createTextOutput(JSON.stringify(result))
@@ -135,10 +193,23 @@ function doPost(e) {
     var content = e.postData.contents;
     var params = JSON.parse(content);
     var action = params.action; // 'add' | 'update' | 'delete'
-    var type = params.type;     // 'monthlyDates' | 'longTermDates'
+    var type = params.type;     // 'monthlyDates' | 'longTermDates' | 'cityTrips'
     var item = params.data || {};
 
-    var targetSheet = (type === "monthlyDates") ? sheets.monthlySheet : sheets.longTermSheet;
+    var targetSheet;
+    if (type === "monthlyDates") {
+      targetSheet = sheets.monthlySheet;
+    } else if (type === "longTermDates") {
+      targetSheet = sheets.longTermSheet;
+    } else if (type === "cityTrips") {
+      targetSheet = sheets.citySheet;
+    }
+
+    if (!targetSheet) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Tab tidak valid" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     var rows = targetSheet.getDataRange().getValues();
 
     if (action === "add") {
@@ -152,7 +223,7 @@ function doPost(e) {
           item.locationUrl || "",
           Boolean(item.visited)
         ]);
-      } else {
+      } else if (type === "longTermDates") {
         targetSheet.appendRow([
           newId,
           item.name || "",
@@ -162,6 +233,15 @@ function doPost(e) {
           Boolean(item.visited),
           Number(item.savingsTarget) || 0,
           Number(item.savedAmount) || 0
+        ]);
+      } else if (type === "cityTrips") {
+        targetSheet.appendRow([
+          newId,
+          item.cityName || "",
+          item.startDate || "",
+          item.endDate || "",
+          item.notes || "",
+          JSON.stringify(item.destinations || [])
         ]);
       }
       return ContentService.createTextOutput(JSON.stringify({ status: "success", action: "add", id: newId }))
@@ -188,7 +268,7 @@ function doPost(e) {
             item.locationUrl || "",
             Boolean(item.visited)
           ]]);
-        } else {
+        } else if (type === "longTermDates") {
           targetSheet.getRange(rowIndex, 1, 1, 8).setValues([[
             targetId,
             item.name || "",
@@ -198,6 +278,15 @@ function doPost(e) {
             Boolean(item.visited),
             Number(item.savingsTarget) || 0,
             Number(item.savedAmount) || 0
+          ]]);
+        } else if (type === "cityTrips") {
+          targetSheet.getRange(rowIndex, 1, 1, 6).setValues([[
+            targetId,
+            item.cityName || "",
+            item.startDate || "",
+            item.endDate || "",
+            item.notes || "",
+            JSON.stringify(item.destinations || [])
           ]]);
         }
         return ContentService.createTextOutput(JSON.stringify({ status: "success", action: "update", id: targetId }))
@@ -230,4 +319,3 @@ function doPost(e) {
     })).setMimeType(ContentService.MimeType.JSON);
   }
 }
-

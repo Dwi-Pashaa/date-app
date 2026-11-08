@@ -7,6 +7,9 @@ import TabSelector from './components/TabSelector';
 import FilterBar from './components/FilterBar';
 import DateCard from './components/DateCard';
 import DateForm from './components/DateForm';
+import CityCard from './components/CityCard';
+import CityFormModal from './components/CityFormModal';
+import CityDetailModal from './components/CityDetailModal';
 import SavingsModal from './components/SavingsModal';
 import GoogleSheetsModal from './components/GoogleSheetsModal';
 import EmptyState from './components/EmptyState';
@@ -17,31 +20,41 @@ import WelcomeSplash from './components/WelcomeSplash';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
-  const [activeTab, setActiveTab] = useState('monthly');
+  const [activeTab, setActiveTab] = useState('monthly'); // 'monthly' | 'longterm' | 'cities'
   const [monthlyDates, setMonthlyDates] = useState([]);
   const [longTermDates, setLongTermDates] = useState([]);
+  const [cityTrips, setCityTrips] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Modals state
   const [showForm, setShowForm] = useState(false);
-  const [showSheetsModal, setShowSheetsModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
+  const [showCityForm, setShowCityForm] = useState(false);
+  const [editCity, setEditCity] = useState(null);
+  const [selectedCityForDetail, setSelectedCityForDetail] = useState(null);
   const [savingsItem, setSavingsItem] = useState(null);
-  const [toast, setToast] = useState(null);
+  const [showSheetsModal, setShowSheetsModal] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+
+  // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest'); // Default: Yang terbaru di depan
+  const [sortBy, setSortBy] = useState('newest');
   const [isSheetsConnected, setIsSheetsConnected] = useState(Boolean(api.getSheetsUrl()));
+  const [toast, setToast] = useState(null);
 
   // Fetch data awal
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [monthly, longTerm] = await Promise.all([
+      const [monthly, longTerm, cities] = await Promise.all([
         api.getMonthlyDates(),
         api.getLongTermDates(),
+        api.getCityTrips(),
       ]);
       setMonthlyDates(monthly);
       setLongTermDates(longTerm);
+      setCityTrips(cities);
       setIsSheetsConnected(Boolean(api.getSheetsUrl()));
     } catch (err) {
       console.error('Gagal memuat data:', err);
@@ -55,11 +68,10 @@ export default function App() {
     fetchData();
   }, [fetchData]);
 
-  // CRUD handlers - REALTIME OPTIMISTIC UPDATE
+  // CRUD handlers - Monthly & Long Term
   const handleSave = async (data) => {
     try {
       if (editItem) {
-        // Edit / Update Realtime
         if (activeTab === 'monthly') {
           setMonthlyDates((prev) =>
             prev.map((item) => (String(item.id) === String(editItem.id) ? { ...item, ...data } : item))
@@ -73,7 +85,6 @@ export default function App() {
         }
         setToast({ message: 'Destinasi kita berhasil diperbarui! ✏️', type: 'success' });
       } else {
-        // Tambah Baru Realtime (Langsung muncul di state detik itu juga!)
         if (activeTab === 'monthly') {
           const newItem = await api.addMonthlyDate(data);
           setMonthlyDates((prev) => [newItem, ...prev.filter((it) => it.id !== newItem.id)]);
@@ -91,9 +102,38 @@ export default function App() {
     }
   };
 
+  // CRUD handlers - City Trips
+  const handleSaveCity = async (cityData) => {
+    try {
+      if (editCity) {
+        setCityTrips((prev) =>
+          prev.map((c) => (String(c.id) === String(editCity.id) ? { ...c, ...cityData } : c))
+        );
+        await api.updateCityTrip(editCity.id, cityData);
+        setToast({ message: `Kota "${cityData.cityName}" berhasil diperbarui! ✏️`, type: 'success' });
+      } else {
+        const newCity = await api.addCityTrip(cityData);
+        setCityTrips((prev) => [newCity, ...prev.filter((c) => c.id !== newCity.id)]);
+        setToast({ message: `Kota "${newCity.cityName}" berhasil ditambahkan! 🗺️🎉`, type: 'success' });
+      }
+      setShowCityForm(false);
+      setEditCity(null);
+    } catch (err) {
+      console.error('Gagal menyimpan kota:', err);
+      setToast({ message: 'Gagal menyimpan kota tujuan.', type: 'error' });
+    }
+  };
+
+  const handleUpdateCityFromDetail = async (updatedCity) => {
+    setCityTrips((prev) =>
+      prev.map((c) => (String(c.id) === String(updatedCity.id) ? updatedCity : c))
+    );
+    setSelectedCityForDetail(updatedCity);
+    await api.updateCityTrip(updatedCity.id, updatedCity);
+  };
+
   const handleSaveSavings = async (updatedItem) => {
     try {
-      // Realtime update tabungan
       setLongTermDates((prev) =>
         prev.map((it) => (String(it.id) === String(updatedItem.id) ? updatedItem : it))
       );
@@ -114,16 +154,18 @@ export default function App() {
     if (!confirmDelete || !confirmDelete.item) return;
     const targetId = confirmDelete.item.id;
     const targetTab = confirmDelete.tab;
-    const targetName = confirmDelete.item.name;
+    const targetName = confirmDelete.item.name || confirmDelete.item.cityName;
 
     try {
-      // Realtime hapus dari state UI seketika
       if (targetTab === 'monthly') {
         setMonthlyDates((prev) => prev.filter((it) => String(it.id) !== String(targetId)));
         await api.deleteMonthlyDate(targetId);
-      } else {
+      } else if (targetTab === 'longterm') {
         setLongTermDates((prev) => prev.filter((it) => String(it.id) !== String(targetId)));
         await api.deleteLongTermDate(targetId);
+      } else if (targetTab === 'cities') {
+        setCityTrips((prev) => prev.filter((it) => String(it.id) !== String(targetId)));
+        await api.deleteCityTrip(targetId);
       }
       setToast({ message: `"${targetName}" berhasil dihapus! 🗑️`, type: 'success' });
       setConfirmDelete(null);
@@ -134,14 +176,18 @@ export default function App() {
   };
 
   const handleEdit = (item) => {
-    setEditItem(item);
-    setShowForm(true);
+    if (activeTab === 'cities') {
+      setEditCity(item);
+      setShowCityForm(true);
+    } else {
+      setEditItem(item);
+      setShowForm(true);
+    }
   };
 
   const handleToggleVisited = async (item) => {
     const updated = { ...item, visited: !item.visited };
     try {
-      // Realtime toggle status
       if (activeTab === 'monthly') {
         setMonthlyDates((prev) =>
           prev.map((it) => (String(it.id) === String(item.id) ? updated : it))
@@ -162,16 +208,47 @@ export default function App() {
     }
   };
 
-  const currentRawList = activeTab === 'monthly' ? monthlyDates : longTermDates;
-
-  // Filtered and Searched list with Sorting
+  // Filtered and Searched list
   const filteredList = useMemo(() => {
+    if (activeTab === 'cities') {
+      return cityTrips
+        .filter((city) => {
+          if (!searchQuery.trim()) return true;
+          const q = searchQuery.toLowerCase();
+          const matchCity = city.cityName?.toLowerCase().includes(q);
+          const matchNotes = city.notes?.toLowerCase().includes(q);
+          const matchDest = city.destinations?.some(
+            (d) =>
+              d.placeName?.toLowerCase().includes(q) ||
+              d.location?.toLowerCase().includes(q)
+          );
+          return matchCity || matchNotes || matchDest;
+        })
+        .sort((a, b) => {
+          if (sortBy === 'newest') {
+            const timeA = new Date(a.createdAt || 0).getTime() || 0;
+            const timeB = new Date(b.createdAt || 0).getTime() || 0;
+            return timeB - timeA;
+          }
+          if (sortBy === 'date-desc') {
+            return new Date(b.startDate || 0) - new Date(a.startDate || 0);
+          }
+          if (sortBy === 'date-asc') {
+            return new Date(a.startDate || 0) - new Date(b.startDate || 0);
+          }
+          if (sortBy === 'name-asc') {
+            return (a.cityName || '').localeCompare(b.cityName || '');
+          }
+          return 0;
+        });
+    }
+
+    const currentRawList = activeTab === 'monthly' ? monthlyDates : longTermDates;
+
     let result = currentRawList.filter((item) => {
-      // Status filter
       if (statusFilter === 'visited' && !item.visited) return false;
       if (statusFilter === 'pending' && item.visited) return false;
 
-      // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = item.name?.toLowerCase().includes(q);
@@ -182,7 +259,6 @@ export default function App() {
       return true;
     });
 
-    // Sorting (Terbaru selalu di paling depan secara default)
     result = [...result].sort((a, b) => {
       if (sortBy === 'newest') {
         const timeA = new Date(a.createdAt || 0).getTime() || Number(String(a.id).replace(/\D/g, '')) || 0;
@@ -207,7 +283,14 @@ export default function App() {
     });
 
     return result;
-  }, [currentRawList, statusFilter, searchQuery, sortBy]);
+  }, [activeTab, monthlyDates, longTermDates, cityTrips, statusFilter, searchQuery, sortBy]);
+
+  const rawCount =
+    activeTab === 'monthly'
+      ? monthlyDates.length
+      : activeTab === 'longterm'
+      ? longTermDates.length
+      : cityTrips.length;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-700">
@@ -221,6 +304,7 @@ export default function App() {
         <StatsBar
           monthlyDates={monthlyDates}
           longTermDates={longTermDates}
+          cityTrips={cityTrips}
           activeTab={activeTab}
         />
 
@@ -235,22 +319,33 @@ export default function App() {
             }}
             monthlyCt={monthlyDates.length}
             longTermCt={longTermDates.length}
+            citiesCt={cityTrips.length}
           />
 
           <button
+            type="button"
             onClick={() => {
-              setEditItem(null);
-              setShowForm(true);
+              if (activeTab === 'cities') {
+                setEditCity(null);
+                setShowCityForm(true);
+              } else {
+                setEditItem(null);
+                setShowForm(true);
+              }
             }}
-            className="flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 transition-all cursor-pointer text-sm sm:text-base"
+            className="flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 transition-all cursor-pointer text-sm sm:text-base flex-shrink-0"
           >
             <FiPlus className="w-5 h-5 stroke-[2.5]" />
-            <span>Tambah Destinasi Kita</span>
+            <span>
+              {activeTab === 'cities'
+                ? 'Buat Trip Kota Kita'
+                : 'Tambah Destinasi Kita'}
+            </span>
           </button>
         </div>
 
         {/* Filter & Search Bar */}
-        {currentRawList.length > 0 && (
+        {rawCount > 0 && (
           <FilterBar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -265,17 +360,22 @@ export default function App() {
         {/* Content Section */}
         {loading ? (
           <LoadingSpinner />
-        ) : currentRawList.length === 0 ? (
+        ) : rawCount === 0 ? (
           <EmptyState
             type={activeTab}
             onAddClick={() => {
-              setEditItem(null);
-              setShowForm(true);
+              if (activeTab === 'cities') {
+                setEditCity(null);
+                setShowCityForm(true);
+              } else {
+                setEditItem(null);
+                setShowForm(true);
+              }
             }}
           />
         ) : filteredList.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs max-w-md mx-auto my-6">
-            <p className="text-slate-600 font-semibold mb-1 text-sm">Tidak ada destinasi yang cocok</p>
+            <p className="text-slate-600 font-semibold mb-1 text-sm">Tidak ada yang cocok</p>
             <p className="text-xs text-slate-400 mb-4">Coba cari kata kunci lain atau ubah status filter</p>
             <button
               onClick={() => {
@@ -287,7 +387,21 @@ export default function App() {
               Reset Filter
             </button>
           </div>
+        ) : activeTab === 'cities' ? (
+          /* Grid Kota Tujuan */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+            {filteredList.map((city) => (
+              <CityCard
+                key={city.id}
+                city={city}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onOpenDetail={(c) => setSelectedCityForDetail(c)}
+              />
+            ))}
+          </div>
         ) : (
+          /* Grid Bulanan & Jangka Panjang */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
             {filteredList.map((item) => (
               <DateCard
@@ -309,7 +423,7 @@ export default function App() {
         <p>Dibuat dengan 💙 untuk perjalanan indah kita berdua</p>
       </footer>
 
-      {/* Modal Form */}
+      {/* Modal Form Destinasi (Bulanan / Jangka Panjang) */}
       {showForm && (
         <DateForm
           type={activeTab}
@@ -319,6 +433,29 @@ export default function App() {
             setShowForm(false);
             setEditItem(null);
           }}
+        />
+      )}
+
+      {/* Modal Form Kota Tujuan */}
+      {showCityForm && (
+        <CityFormModal
+          isOpen={showCityForm}
+          editCity={editCity}
+          onSave={handleSaveCity}
+          onClose={() => {
+            setShowCityForm(false);
+            setEditCity(null);
+          }}
+        />
+      )}
+
+      {/* Modal Detail & Itinerary Kota */}
+      {selectedCityForDetail && (
+        <CityDetailModal
+          isOpen={Boolean(selectedCityForDetail)}
+          city={selectedCityForDetail}
+          onClose={() => setSelectedCityForDetail(null)}
+          onUpdateCity={handleUpdateCityFromDetail}
         />
       )}
 

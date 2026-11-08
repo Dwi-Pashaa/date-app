@@ -46,6 +46,45 @@ const initialData = {
       savedAmount: 5000000,
       createdAt: "2026-11-02T10:00:00.000Z"
     }
+  ],
+  cityTrips: [
+    {
+      id: "city_1",
+      cityName: "Bandung Romantis",
+      startDate: "2026-12-25",
+      endDate: "2026-12-27",
+      notes: "Liburan akhir pekan & keliling cafe estetik berdua 🚙",
+      destinations: [
+        {
+          id: "dest_1",
+          placeName: "Sarapan di Roti Macan",
+          location: "Jl. Buah Batu, Bandung",
+          locationUrl: "https://maps.google.com/?q=Roti+Macan+Bandung",
+          date: "2026-12-25",
+          time: "08:30",
+          visited: false
+        },
+        {
+          id: "dest_2",
+          placeName: "Kawah Putih Ciwidey",
+          location: "Sugihmukti, Pasirjambu, Bandung",
+          locationUrl: "https://maps.google.com/?q=Kawah+Putih+Ciwidey",
+          date: "2026-12-25",
+          time: "11:00",
+          visited: false
+        },
+        {
+          id: "dest_3",
+          placeName: "Dinner Romantis The Valley Bistro",
+          location: "Jl. Lembah Pakar Timur No. 28, Dago",
+          locationUrl: "https://maps.google.com/?q=The+Valley+Bistro+Cafe+Bandung",
+          date: "2026-12-25",
+          time: "19:00",
+          visited: false
+        }
+      ],
+      createdAt: "2026-11-01T10:00:00.000Z"
+    }
   ]
 };
 
@@ -53,6 +92,7 @@ const initialData = {
 let memoryStore = {
   monthlyDates: JSON.parse(JSON.stringify(initialData.monthlyDates)),
   longTermDates: JSON.parse(JSON.stringify(initialData.longTermDates)),
+  cityTrips: JSON.parse(JSON.stringify(initialData.cityTrips)),
 };
 
 // Bersihkan data list lama dari localStorage jika sebelumnya sempat tersimpan
@@ -60,6 +100,7 @@ if (typeof window !== 'undefined') {
   try {
     localStorage.removeItem('list_date_monthlyDates');
     localStorage.removeItem('list_date_longTermDates');
+    localStorage.removeItem('list_date_cityTrips');
   } catch {}
 }
 
@@ -163,7 +204,6 @@ export const api = {
       id: 'm_' + Date.now(),
       createdAt: new Date().toISOString(),
     };
-    // Simpan ke in-memory store (terbaru di depan)
     memoryStore.monthlyDates = [newItem, ...memoryStore.monthlyDates];
 
     if (getSheetsUrl()) {
@@ -239,6 +279,54 @@ export const api = {
 
     if (getSheetsUrl()) {
       sendGoogleSheetsAction('delete', 'longTermDates', id);
+    }
+  },
+
+  // City Trips (Fitur Kota Tujuan & Itinerary)
+  async getCityTrips() {
+    const sheetsData = await fetchGoogleSheets();
+    if (sheetsData && Array.isArray(sheetsData.cityTrips)) {
+      memoryStore.cityTrips = sheetsData.cityTrips;
+      return memoryStore.cityTrips;
+    }
+    return memoryStore.cityTrips;
+  },
+
+  async addCityTrip(data) {
+    const newItem = {
+      ...data,
+      id: 'city_' + Date.now(),
+      destinations: data.destinations || [],
+      createdAt: new Date().toISOString(),
+    };
+    memoryStore.cityTrips = [newItem, ...memoryStore.cityTrips];
+
+    if (getSheetsUrl()) {
+      sendGoogleSheetsAction('add', 'cityTrips', newItem);
+    }
+
+    return newItem;
+  },
+
+  async updateCityTrip(id, data) {
+    memoryStore.cityTrips = memoryStore.cityTrips.map((item) =>
+      String(item.id) === String(id) ? { ...item, ...data, id } : item
+    );
+
+    if (getSheetsUrl()) {
+      sendGoogleSheetsAction('update', 'cityTrips', { ...data, id });
+    }
+
+    return { ...data, id };
+  },
+
+  async deleteCityTrip(id) {
+    memoryStore.cityTrips = memoryStore.cityTrips.filter(
+      (item) => String(item.id) !== String(id)
+    );
+
+    if (getSheetsUrl()) {
+      sendGoogleSheetsAction('delete', 'cityTrips', id);
     }
   },
 };

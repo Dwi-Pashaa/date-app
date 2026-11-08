@@ -3,8 +3,13 @@ import { FiAlertTriangle, FiTrash2, FiX, FiCalendar, FiMapPin } from 'react-icon
 export default function ConfirmDialog({ item, onConfirm, onCancel }) {
   if (!item) return null;
 
+  const displayName = item.name || item.cityName || 'Item ini';
+  const displayDate = item.startDate
+    ? `${item.startDate} – ${item.endDate || item.startDate}`
+    : item.date;
+
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 border border-gray-100 text-center animate-slide-up relative">
         <button
           type="button"
@@ -18,19 +23,19 @@ export default function ConfirmDialog({ item, onConfirm, onCancel }) {
           <FiAlertTriangle className="w-8 h-8" />
         </div>
 
-        <h3 className="text-xl font-bold text-slate-800 mb-1">Hapus Destinasi?</h3>
+        <h3 className="text-xl font-bold text-slate-800 mb-1">Konfirmasi Hapus</h3>
         <p className="text-xs text-slate-500 mb-4">
-          Data destinasi berikut akan dihapus dari daftar rencana kita:
+          Data berikut akan dihapus secara permanen dari daftar rencana kita:
         </p>
 
-        {/* Card ringkasan destinasi yang akan dihapus */}
+        {/* Card ringkasan yang akan dihapus */}
         <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 text-left mb-6">
-          <p className="font-bold text-slate-800 text-sm truncate mb-1.5">{item.name}</p>
+          <p className="font-bold text-slate-800 text-sm truncate mb-1.5">{displayName}</p>
           <div className="space-y-1 text-xs text-slate-500">
-            {item.date && (
+            {displayDate && (
               <div className="flex items-center gap-2">
                 <FiCalendar className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                <span>{item.date}</span>
+                <span>{displayDate}</span>
               </div>
             )}
             {item.location && (

@@ -140,3 +140,4 @@ export default function CityCard({ city, onEdit, onDelete, onOpenDetail }) {
     </div>
   );
 }
+

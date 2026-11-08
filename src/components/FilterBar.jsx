@@ -47,10 +47,11 @@ export default function FilterBar({
             onChange={(e) => onSortChange(e.target.value)}
             className="bg-transparent font-semibold outline-none cursor-pointer text-slate-700 text-xs"
           >
-            <option value="date-asc">Tanggal Terdekat</option>
-            <option value="date-desc">Tanggal Terjauh</option>
-            <option value="name-asc">Nama (A-Z)</option>
-            {isLongTerm && <option value="savings-desc">Tabungan Terbanyak</option>}
+            <option value="newest">✨ Terbaru Ditambahkan</option>
+            <option value="date-desc">📅 Tanggal Target Terbaru</option>
+            <option value="date-asc">⏳ Tanggal Target Terdekat</option>
+            <option value="name-asc">🔤 Nama (A - Z)</option>
+            {isLongTerm && <option value="savings-desc">💰 Tabungan Terbanyak</option>}
           </select>
         </div>
 

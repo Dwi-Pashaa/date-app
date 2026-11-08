@@ -142,7 +142,7 @@ export default function DateCard({ item, type, onEdit, onDelete, onToggleVisited
               </button>
               <button
                 type="button"
-                onClick={() => onDelete(item.id)}
+                onClick={() => onDelete(item)}
                 className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                 title="Hapus destinasi"
               >

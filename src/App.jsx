@@ -29,7 +29,7 @@ export default function App() {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('date-asc');
+  const [sortBy, setSortBy] = useState('newest'); // Default: Yang terbaru di depan
   const [isSheetsConnected, setIsSheetsConnected] = useState(Boolean(api.getSheetsUrl()));
 
   // Fetch data
@@ -94,18 +94,24 @@ export default function App() {
     }
   };
 
-  const handleDelete = async (id) => {
-    setConfirmDelete({ id, tab: activeTab });
+  const handleDelete = (item) => {
+    // Simpan objek lengkap item yang ingin dihapus
+    setConfirmDelete({ item, tab: activeTab });
   };
 
   const confirmDeleteAction = async () => {
+    if (!confirmDelete || !confirmDelete.item) return;
+    const targetId = confirmDelete.item.id;
+    const targetTab = confirmDelete.tab;
+    const targetName = confirmDelete.item.name;
+
     try {
-      if (confirmDelete.tab === 'monthly') {
-        await api.deleteMonthlyDate(confirmDelete.id);
+      if (targetTab === 'monthly') {
+        await api.deleteMonthlyDate(targetId);
       } else {
-        await api.deleteLongTermDate(confirmDelete.id);
+        await api.deleteLongTermDate(targetId);
       }
-      setToast({ message: 'Destinasi berhasil dihapus! 🗑️', type: 'success' });
+      setToast({ message: `"${targetName}" berhasil dihapus! 🗑️`, type: 'success' });
       setConfirmDelete(null);
       fetchData();
     } catch (err) {
@@ -157,13 +163,18 @@ export default function App() {
       return true;
     });
 
-    // Sorting
+    // Sorting (Terbaru selalu di paling depan secara default)
     result = [...result].sort((a, b) => {
-      if (sortBy === 'date-asc') {
-        return new Date(a.date) - new Date(b.date);
+      if (sortBy === 'newest') {
+        const timeA = new Date(a.createdAt || 0).getTime() || Number(String(a.id).replace(/\D/g, '')) || 0;
+        const timeB = new Date(b.createdAt || 0).getTime() || Number(String(b.id).replace(/\D/g, '')) || 0;
+        return timeB - timeA;
       }
       if (sortBy === 'date-desc') {
         return new Date(b.date) - new Date(a.date);
+      }
+      if (sortBy === 'date-asc') {
+        return new Date(a.date) - new Date(b.date);
       }
       if (sortBy === 'name-asc') {
         return (a.name || '').localeCompare(b.name || '');
@@ -313,10 +324,10 @@ export default function App() {
         }}
       />
 
-      {/* Confirm Delete */}
+      {/* Confirm Delete with Details */}
       {confirmDelete && (
         <ConfirmDialog
-          message="Destinasi ini akan dihapus dari daftar rencana kita."
+          item={confirmDelete.item}
           onConfirm={confirmDeleteAction}
           onCancel={() => setConfirmDelete(null)}
         />

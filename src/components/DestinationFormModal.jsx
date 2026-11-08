@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FiX, FiMapPin, FiClock, FiCalendar, FiLink, FiTarget } from 'react-icons/fi';
+import ImageUploadInput from './ImageUploadInput';
 
 const emptyDestForm = {
   placeName: '',
@@ -7,10 +8,12 @@ const emptyDestForm = {
   date: '',
   location: '',
   locationUrl: '',
+  imageUrl: '',
 };
 
 export default function DestinationFormModal({ isOpen, city, editDest, onSave, onClose }) {
   const [form, setForm] = useState(emptyDestForm);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (editDest) {
@@ -20,6 +23,7 @@ export default function DestinationFormModal({ isOpen, city, editDest, onSave, o
         date: editDest.date || city?.startDate || '',
         location: editDest.location || '',
         locationUrl: editDest.locationUrl || '',
+        imageUrl: editDest.imageUrl || '',
       });
     } else {
       setForm({
@@ -36,12 +40,17 @@ export default function DestinationFormModal({ isOpen, city, editDest, onSave, o
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleImageChange = (url) => {
+    setForm((prev) => ({ ...prev, imageUrl: url }));
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.placeName.trim() || !form.time || !form.location.trim()) return;
 
     onSave({
       ...form,
+      imageUrl: form.imageUrl || '',
       id: editDest ? editDest.id : 'dest_' + Date.now(),
       visited: editDest ? editDest.visited : false,
     });
@@ -143,6 +152,15 @@ export default function DestinationFormModal({ isOpen, city, editDest, onSave, o
             />
           </div>
 
+          {/* Foto Tempat / Destinasi */}
+          <ImageUploadInput
+            value={form.imageUrl}
+            onChange={handleImageChange}
+            onUploadStatusChange={setUploading}
+            label="Foto Tempat Wisata / Cafe"
+            placeholder="Pilih foto tempat ini"
+          />
+
           {/* Link Google Maps */}
           <div>
             <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -170,9 +188,14 @@ export default function DestinationFormModal({ isOpen, city, editDest, onSave, o
             </button>
             <button
               type="submit"
-              className="flex-1 py-2.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+              disabled={uploading}
+              className={`flex-1 py-2.5 px-4 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                uploading
+                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20'
+              }`}
             >
-              {isEdit ? 'Simpan' : 'Tambah Tempat'}
+              {uploading ? 'Sedang Mengunggah...' : isEdit ? 'Simpan' : 'Tambah Tempat'}
             </button>
           </div>
         </form>
@@ -180,4 +203,3 @@ export default function DestinationFormModal({ isOpen, city, editDest, onSave, o
     </div>
   );
 }
-

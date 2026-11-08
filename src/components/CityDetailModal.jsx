@@ -11,8 +11,10 @@ import {
   FiCheckCircle,
   FiCircle,
   FiCompass,
+  FiMaximize2,
 } from 'react-icons/fi';
 import DestinationFormModal from './DestinationFormModal';
+import { formatImageUrl } from '../utils/imageUrl';
 
 function safeParseDate(val) {
   if (!val) return null;
@@ -41,6 +43,7 @@ export default function CityDetailModal({
   city,
   onClose,
   onUpdateCity,
+  onOpenImage,
 }) {
   const [showDestModal, setShowDestModal] = useState(false);
   const [editDest, setEditDest] = useState(null);
@@ -100,37 +103,60 @@ export default function CityDetailModal({
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col border border-gray-100 overflow-hidden animate-slide-up">
-        {/* Header */}
-        <div className="relative bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-600 p-5 sm:p-6 text-white flex-shrink-0">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-full text-blue-100">
-                  Rencana Destinasi Kota
-                </span>
-                {destinations.length > 0 && (
-                  <span className="text-xs font-bold bg-emerald-400 text-slate-900 px-2 py-0.5 rounded-full">
-                    {visitedCount}/{destinations.length} Selesai
+        {/* Header with Cover or Gradient */}
+        <div className="relative bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-600 text-white flex-shrink-0 overflow-hidden">
+          {city.coverUrl && (
+            <div
+              onClick={() => onOpenImage && onOpenImage(city.coverUrl, city.cityName, city.notes || 'Trip Kita', `${city.startDate} – ${city.endDate}`)}
+              className="absolute inset-0 cursor-pointer group/header"
+            >
+              <img
+                src={formatImageUrl(city.coverUrl)}
+                referrerPolicy="no-referrer"
+                loading="lazy"
+                alt={city.cityName}
+                className="w-full h-full object-cover opacity-25 group-hover/header:opacity-35 transition-opacity"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-900/40 to-transparent" />
+            </div>
+          )}
+
+          <div className="relative p-5 sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-full text-blue-100">
+                    Rencana Destinasi Kota
                   </span>
+                  {destinations.length > 0 && (
+                    <span className="text-xs font-bold bg-emerald-400 text-slate-900 px-2 py-0.5 rounded-full">
+                      {visitedCount}/{destinations.length} Selesai
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black leading-tight break-words">
+                  {city.cityName}
+                </h2>
+                <p className="text-blue-100 text-xs sm:text-sm mt-1 flex items-center gap-2">
+                  <FiCalendar className="w-3.5 h-3.5" />
+                  <span>
+                    {city.startDate} – {city.endDate}
+                  </span>
+                </p>
+                {city.notes && (
+                  <p className="text-xs text-blue-100/90 italic mt-1.5 line-clamp-2">
+                    "{city.notes}"
+                  </p>
                 )}
               </div>
-              <h2 className="text-xl sm:text-2xl font-black leading-tight break-words">
-                {city.cityName}
-              </h2>
-              <p className="text-blue-100 text-xs sm:text-sm mt-1 flex items-center gap-2">
-                <FiCalendar className="w-3.5 h-3.5" />
-                <span>
-                  {city.startDate} – {city.endDate}
-                </span>
-              </p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer flex-shrink-0"
+              >
+                <FiX className="w-5 h-5" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer flex-shrink-0"
-            >
-              <FiX className="w-5 h-5" />
-            </button>
           </div>
         </div>
 
@@ -186,13 +212,13 @@ export default function CityDetailModal({
             sortedDestinations.map((dest, idx) => (
               <div
                 key={dest.id || idx}
-                className={`p-3.5 sm:p-4 rounded-2xl border transition-all flex items-start gap-3 justify-between ${
+                className={`p-3.5 sm:p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center gap-3 justify-between ${
                   dest.visited
                     ? 'bg-emerald-50/30 border-emerald-200'
                     : 'bg-white border-slate-200/80 hover:border-blue-200 shadow-2xs'
                 }`}
               >
-                {/* Left: Checkbox + Time + Place details */}
+                {/* Left: Thumbnail (jika ada) + Checkbox + Details */}
                 <div className="flex items-start gap-3 min-w-0 flex-1">
                   {/* Visited toggle */}
                   <button
@@ -207,6 +233,36 @@ export default function CityDetailModal({
                       <FiCircle className="w-5 h-5 hover:text-blue-500" />
                     )}
                   </button>
+
+                  {/* Thumbnail foto tempat */}
+                  {dest.imageUrl && (
+                    <div
+                      onClick={() => onOpenImage && onOpenImage(dest.imageUrl, dest.placeName, dest.location, dest.time)}
+                      className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 cursor-pointer group/t"
+                    >
+                      <img
+                        src={formatImageUrl(dest.imageUrl)}
+                        referrerPolicy="no-referrer"
+                        loading="lazy"
+                        alt={dest.placeName}
+                        className="w-full h-full object-cover transition-transform group-hover/t:scale-110"
+                        onError={(e) => {
+                          const currentSrc = e.currentTarget.src;
+                          if (currentSrc.includes('thumbnail?id=')) {
+                            const idMatch = currentSrc.match(/id=([a-zA-Z0-9_-]+)/);
+                            if (idMatch) {
+                              e.currentTarget.src = `https://lh3.googleusercontent.com/d/${idMatch[1]}`;
+                              return;
+                            }
+                          }
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/t:opacity-100 transition-opacity flex items-center justify-center text-white">
+                        <FiMaximize2 className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+                  )}
 
                   <div className="min-w-0 flex-1">
                     {/* Time & Date Badges */}
@@ -238,14 +294,16 @@ export default function CityDetailModal({
 
                     {/* Location + Maps Link */}
                     <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-500">
-                      <FiMapPin className="w-3.5 h-3.5 text-rose-500 flex-shrink-0" />
-                      <span className="truncate">{dest.location}</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <FiMapPin className="w-3.5 h-3.5 text-rose-500 flex-shrink-0" />
+                        <span className="truncate">{dest.location}</span>
+                      </div>
                       {dest.locationUrl && (
                         <a
                           href={dest.locationUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md transition-colors flex-shrink-0"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md flex-shrink-0"
                         >
                           <FiExternalLink className="w-3 h-3" />
                           Maps
@@ -255,8 +313,8 @@ export default function CityDetailModal({
                   </div>
                 </div>
 
-                {/* Right: Actions */}
-                <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                {/* Right: Actions (Edit & Delete) */}
+                <div className="flex items-center gap-1 self-end sm:self-center flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => {
@@ -264,7 +322,7 @@ export default function CityDetailModal({
                       setShowDestModal(true);
                     }}
                     className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                    title="Edit destinasi"
+                    title="Edit Tempat"
                   >
                     <FiEdit3 className="w-4 h-4" />
                   </button>
@@ -272,7 +330,7 @@ export default function CityDetailModal({
                     type="button"
                     onClick={() => handleDeleteDestination(dest.id)}
                     className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                    title="Hapus destinasi"
+                    title="Hapus Tempat"
                   >
                     <FiTrash2 className="w-4 h-4" />
                   </button>
@@ -283,31 +341,31 @@ export default function CityDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end flex-shrink-0">
+        <div className="p-4 sm:px-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2 flex-shrink-0">
+          <span className="text-xs text-slate-500">
+            Total Destinasi: <strong className="text-slate-800">{destinations.length} Tempat</strong>
+          </span>
           <button
             type="button"
             onClick={onClose}
-            className="py-2.5 px-6 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs sm:text-sm rounded-xl transition-colors cursor-pointer"
+            className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs sm:text-sm rounded-xl transition-colors cursor-pointer"
           >
-            Selesai
+            Tutup
           </button>
         </div>
       </div>
 
-      {/* Modal Tambah/Edit Destinasi */}
-      {showDestModal && (
-        <DestinationFormModal
-          isOpen={showDestModal}
-          city={city}
-          editDest={editDest}
-          onSave={handleSaveDestination}
-          onClose={() => {
-            setShowDestModal(false);
-            setEditDest(null);
-          }}
-        />
-      )}
+      {/* Destination Add/Edit Modal */}
+      <DestinationFormModal
+        isOpen={showDestModal}
+        city={city}
+        editDest={editDest}
+        onSave={handleSaveDestination}
+        onClose={() => {
+          setShowDestModal(false);
+          setEditDest(null);
+        }}
+      />
     </div>
   );
 }
-

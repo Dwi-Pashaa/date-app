@@ -1,5 +1,6 @@
 // Smart Data API
 // Data disimpan di In-Memory State & langsung sinkron otomatis ke Google Spreadsheet secara realtime.
+import { compressImage } from './utils/imageCompressor';
 
 // =========================================================================================
 // 📌 URL GOOGLE SPREADSHEET TERTANAM (EMBEDDED)
@@ -43,6 +44,7 @@ const initialData = {
       location: "Resto ABC, Jakarta Selatan",
       locationUrl: "https://maps.google.com/?q=Jakarta+Selatan",
       visited: false,
+      imageUrl: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&auto=format&fit=crop&q=80",
       createdAt: "2026-11-01T10:00:00.000Z"
     },
     {
@@ -52,6 +54,7 @@ const initialData = {
       location: "Taman Mini Indonesia Indah",
       locationUrl: "https://maps.google.com/?q=Taman+Mini+Indonesia+Indah",
       visited: true,
+      imageUrl: "https://images.unsplash.com/photo-1526772662000-3f88f10405ff?w=800&auto=format&fit=crop&q=80",
       createdAt: "2026-11-02T10:00:00.000Z"
     }
   ],
@@ -86,6 +89,7 @@ const initialData = {
       startDate: "2026-12-25",
       endDate: "2026-12-27",
       notes: "Liburan akhir pekan & keliling cafe estetik berdua 🚙",
+      coverUrl: "https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?w=800&auto=format&fit=crop&q=80",
       destinations: [
         {
           id: "dest_1",
@@ -94,7 +98,8 @@ const initialData = {
           locationUrl: "https://maps.google.com/?q=Roti+Macan+Bandung",
           date: "2026-12-25",
           time: "08:30",
-          visited: false
+          visited: false,
+          imageUrl: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=600&auto=format&fit=crop&q=80"
         },
         {
           id: "dest_2",
@@ -103,7 +108,8 @@ const initialData = {
           locationUrl: "https://maps.google.com/?q=Kawah+Putih+Ciwidey",
           date: "2026-12-25",
           time: "11:00",
-          visited: false
+          visited: false,
+          imageUrl: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&auto=format&fit=crop&q=80"
         },
         {
           id: "dest_3",
@@ -112,7 +118,8 @@ const initialData = {
           locationUrl: "https://maps.google.com/?q=The+Valley+Bistro+Cafe+Bandung",
           date: "2026-12-25",
           time: "19:00",
-          visited: false
+          visited: false,
+          imageUrl: "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&auto=format&fit=crop&q=80"
         }
       ],
       createdAt: "2026-11-01T10:00:00.000Z"
@@ -202,8 +209,12 @@ async function fetchGoogleSheets(force = false) {
 async function sendGoogleSheetsAction(action, type, payload) {
   const url = getSheetsUrl();
   if (!url) return false;
+  // Set timestamp jauh ke depan agar silentSync tidak langsung re-fetch
+  // sebelum Sheets selesai menyimpan (terutama untuk URL foto dari Drive)
+  lastFetchTimestamp = Date.now() + 8000;
+  cachedSheetsResult = null;
   try {
-    await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/plain;charset=utf-8',
@@ -214,12 +225,15 @@ async function sendGoogleSheetsAction(action, type, payload) {
         ...(action === 'delete' ? { id: payload } : { data: payload }),
       }),
     });
-    // Invalidate cache setelah mutasi
+    const json = await res.json().catch(() => null);
+    // Setelah Sheets konfirmasi simpan, baru invalidate agar sync berikutnya ambil data terbaru
     cachedSheetsResult = null;
     lastFetchTimestamp = 0;
-    return true;
+    return json;
   } catch (err) {
     console.warn('Gagal sync ke Google Sheets:', err);
+    cachedSheetsResult = null;
+    lastFetchTimestamp = 0;
     return false;
   }
 }
@@ -249,14 +263,69 @@ export const api = {
     }
   },
 
+  // Upload Foto ke Google Drive via Apps Script dengan kompresi otomatis
+  async uploadPhoto(file) {
+    if (!file) return null;
+    try {
+      // 1. Kompresi gambar sisi klien (~150-300KB WebP)
+      const compressed = await compressImage(file, 1200, 1200, 0.82);
+
+      const url = getSheetsUrl();
+      if (!url) {
+        // Jika belum terhubung Google Sheets, gunakan compressed base64 langsung
+        return compressed.base64;
+      }
+
+      // 2. Kirim ke Google Apps Script untuk disimpan di Google Drive
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify({
+          action: 'uploadImage',
+          base64: compressed.base64,
+          fileName: compressed.fileName,
+        }),
+      });
+
+      const result = await res.json().catch(() => null);
+      if (result && result.status === 'success' && result.url) {
+        return result.url;
+      }
+
+      // Fallback ke compressed base64 jika drive upload gagal
+      return compressed.base64;
+    } catch (err) {
+      console.warn('Gagal upload ke Drive, menggunakan base64 terkompresi:', err);
+      // Fallback coba kompresi langsung
+      try {
+        const fallback = await compressImage(file, 800, 800, 0.7);
+        return fallback.base64;
+      } catch {
+        return null;
+      }
+    }
+  },
+
   // Mengambil seluruh data (3 Tab) dalam 1 panggilan cepat
   async getAllData(force = false) {
     const sheetsData = await fetchGoogleSheets(force);
     if (sheetsData) {
+      // Helper: bersihkan imageUrl yang rusak (blob: sesi lama atau data:image terlalu besar)
+      const cleanImageUrl = (url) => {
+        if (!url) return '';
+        const s = String(url).trim();
+        if (s.startsWith('blob:')) return '';
+        if (s.startsWith('data:image') && s.length > 500000) return ''; // base64 terlalu besar, buang
+        return s;
+      };
+
       if (Array.isArray(sheetsData.monthlyDates)) {
         memoryStore.monthlyDates = sheetsData.monthlyDates.map((item) => ({
           ...item,
           date: normalizeDate(item.date),
+          imageUrl: cleanImageUrl(item.imageUrl),
         }));
       }
       if (Array.isArray(sheetsData.longTermDates)) {
@@ -271,10 +340,12 @@ export const api = {
           ...item,
           startDate: normalizeDate(item.startDate),
           endDate: normalizeDate(item.endDate || item.startDate),
+          coverUrl: cleanImageUrl(item.coverUrl),
           destinations: Array.isArray(item.destinations)
             ? item.destinations.map((d) => ({
                 ...d,
                 date: normalizeDate(d.date),
+                imageUrl: cleanImageUrl(d.imageUrl),
               }))
             : [],
         }));
@@ -297,6 +368,7 @@ export const api = {
     const newItem = {
       ...data,
       date: normalizeDate(data.date),
+      imageUrl: data.imageUrl || '',
       id: 'm_' + Date.now(),
       createdAt: new Date().toISOString(),
     };
@@ -313,6 +385,7 @@ export const api = {
     const cleanData = {
       ...data,
       date: normalizeDate(data.date),
+      imageUrl: data.imageUrl !== undefined ? data.imageUrl : '',
     };
     memoryStore.monthlyDates = memoryStore.monthlyDates.map((item) =>
       String(item.id) === String(id) ? { ...item, ...cleanData, id } : item
@@ -395,10 +468,12 @@ export const api = {
       id: 'city_' + Date.now(),
       startDate: normalizeDate(data.startDate),
       endDate: normalizeDate(data.endDate || data.startDate),
+      coverUrl: data.coverUrl || '',
       destinations: Array.isArray(data.destinations)
         ? data.destinations.map((d) => ({
             ...d,
             date: normalizeDate(d.date),
+            imageUrl: d.imageUrl || '',
           }))
         : [],
       createdAt: new Date().toISOString(),
@@ -417,10 +492,12 @@ export const api = {
       ...data,
       startDate: normalizeDate(data.startDate),
       endDate: normalizeDate(data.endDate || data.startDate),
+      coverUrl: data.coverUrl !== undefined ? data.coverUrl : '',
       destinations: Array.isArray(data.destinations)
         ? data.destinations.map((d) => ({
             ...d,
             date: normalizeDate(d.date),
+            imageUrl: d.imageUrl || '',
           }))
         : undefined,
     };

@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { FiX, FiMapPin, FiCalendar, FiLink, FiTarget } from 'react-icons/fi';
 import { FaPiggyBank } from 'react-icons/fa';
+import ImageUploadInput from './ImageUploadInput';
 
 const emptyForm = {
   name: '',
   date: '',
   location: '',
   locationUrl: '',
+  imageUrl: '',
   visited: false,
   savingsTarget: '',
   savedAmount: '',
@@ -14,6 +16,7 @@ const emptyForm = {
 
 export default function DateForm({ type, editItem, onSave, onCancel }) {
   const [form, setForm] = useState(emptyForm);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (editItem) {
@@ -23,6 +26,7 @@ export default function DateForm({ type, editItem, onSave, onCancel }) {
       setForm({
         ...editItem,
         date: cleanDate,
+        imageUrl: editItem.imageUrl || '',
         savingsTarget: editItem.savingsTarget ?? '',
         savedAmount: editItem.savedAmount ?? '',
       });
@@ -36,10 +40,15 @@ export default function DateForm({ type, editItem, onSave, onCancel }) {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleImageChange = (url) => {
+    setForm((prev) => ({ ...prev, imageUrl: url }));
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     const data = {
       ...form,
+      imageUrl: form.imageUrl || '',
       savingsTarget: type === 'longterm' ? Number(form.savingsTarget) || 0 : undefined,
       savedAmount: type === 'longterm' ? Number(form.savedAmount) || 0 : undefined,
     };
@@ -64,10 +73,11 @@ export default function DateForm({ type, editItem, onSave, onCancel }) {
                 {isEdit ? 'Edit Destinasi' : 'Tambah Destinasi'}
               </h2>
               <p className="text-blue-100 text-xs mt-0.5">
-                {type === 'monthly' ? '🗓️ List Bulanan' : '🎯 List Jangka Panjang'}
+                {type === 'monthly' ? '🗓️ List Bulanan Kita' : '🎯 List Jangka Panjang'}
               </p>
             </div>
             <button
+              type="button"
               onClick={onCancel}
               className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
             >
@@ -144,6 +154,15 @@ export default function DateForm({ type, editItem, onSave, onCancel }) {
             />
           </div>
 
+          {/* Foto Tempat / Kenangan Date */}
+          <ImageUploadInput
+            value={form.imageUrl}
+            onChange={handleImageChange}
+            onUploadStatusChange={setUploading}
+            label="Foto Tempat / Kenangan Date"
+            placeholder="Pilih foto tempat atau kenangan kita"
+          />
+
           {/* Savings fields (long term only) */}
           {type === 'longterm' && (
             <div className="grid grid-cols-2 gap-3 pt-1">
@@ -197,9 +216,14 @@ export default function DateForm({ type, editItem, onSave, onCancel }) {
             </button>
             <button
               type="submit"
-              className="flex-1 px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 transition-all cursor-pointer text-sm"
+              disabled={uploading}
+              className={`flex-1 px-5 py-3 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 ${
+                uploading
+                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 cursor-pointer'
+              }`}
             >
-              {isEdit ? 'Simpan' : 'Tambah'}
+              {uploading ? 'Sedang Mengunggah Foto...' : isEdit ? 'Simpan Perubahan' : 'Tambah Destinasi'}
             </button>
           </div>
         </form>

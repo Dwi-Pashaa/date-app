@@ -2,14 +2,31 @@
  * ===================================================================
  * GOOGLE APPS SCRIPT - DATABASE LIST DATE KITA 💙
  * ===================================================================
- * Script ini digunakan sebagai backend database realtime untuk web List Date.
+ * Script ini digunakan sebagai backend database realtime & storage foto untuk web List Date.
  * 
- * SPREADSHEET AKAN MEMILIKI 3 TAB TERPISAH:
- * 1. "MonthlyDates"  -> Daftar kencan / date rutin bulanan kita
+ * SPREADSHEET MEMILIKI 3 TAB TERPISAH:
+ * 1. "MonthlyDates"  -> Daftar date rutin bulanan kita (lengkap dengan foto kenangan)
  * 2. "LongTermDates" -> Destinasi impian jangka panjang + progress tabungan
- * 3. "KotaTujuan"    -> Rencana trip luar kota + jadwal destinasi & jam kunjungan
+ * 3. "KotaTujuan"    -> Rencana trip kota + foto cover + itinerary tempat & jam
  * ===================================================================
  */
+
+/**
+ * ⚡ PENTING UNTUK FITUR FOTO:
+ * Jalankan fungsi ini SEKALI di editor Apps Script (Pilih "authorizeDriveApp" lalu klik "Run" / "Jalankan")
+ * untuk memberikan izin akses Google Drive agar foto bisa disimpan otomatis.
+ */
+function authorizeDriveApp() {
+  var folderName = "List Date Photos Kita 📸";
+  var folders = DriveApp.getFoldersByName(folderName);
+  var targetFolder;
+  if (folders.hasNext()) {
+    targetFolder = folders.next();
+  } else {
+    targetFolder = DriveApp.createFolder(folderName);
+  }
+  Logger.log("Izin Tulis Google Drive BERHASIL diaktifkan! Folder: " + targetFolder.getName());
+}
 
 function formatCellDate(val) {
   if (!val) return "";
@@ -40,15 +57,16 @@ function setupSheets(ss) {
   var monthlySheet = ss.getSheetByName("MonthlyDates") || ss.getSheetByName("Bulanan");
   if (!monthlySheet) {
     monthlySheet = ss.insertSheet("MonthlyDates");
-    monthlySheet.appendRow(["id", "name", "date", "location", "locationUrl", "visited"]);
-    monthlySheet.getRange("A1:F1").setFontWeight("bold").setBackground("#dbeafe").setHorizontalAlignment("center");
+    monthlySheet.appendRow(["id", "name", "date", "location", "locationUrl", "visited", "imageUrl"]);
+    monthlySheet.getRange("A1:G1").setFontWeight("bold").setBackground("#dbeafe").setHorizontalAlignment("center");
     monthlySheet.appendRow([
       "m_1",
       "Dinner Romantis di Resto ABC",
       "2026-12-15",
       "Resto ABC, Jakarta Selatan",
       "https://maps.google.com/?q=Jakarta+Selatan",
-      false
+      false,
+      ""
     ]);
     monthlySheet.appendRow([
       "m_2",
@@ -56,8 +74,15 @@ function setupSheets(ss) {
       "2026-12-20",
       "Taman Mini Indonesia Indah",
       "https://maps.google.com/?q=Taman+Mini+Indonesia+Indah",
-      true
+      true,
+      ""
     ]);
+  } else {
+    // Pastikan header imageUrl ada di kolom G jika belum ada
+    var mHeaders = monthlySheet.getRange(1, 1, 1, Math.max(monthlySheet.getLastColumn(), 1)).getValues()[0];
+    if (mHeaders.indexOf("imageUrl") === -1) {
+      monthlySheet.getRange(1, mHeaders.length + 1).setValue("imageUrl").setFontWeight("bold").setBackground("#dbeafe");
+    }
   }
 
   // 2. Tab LongTermDates (Jangka Panjang)
@@ -76,24 +101,14 @@ function setupSheets(ss) {
       5000000,
       2000000
     ]);
-    longTermSheet.appendRow([
-      "lt_2",
-      "Liburan ke Jepang",
-      "2027-12-01",
-      "Tokyo, Jepang",
-      "https://maps.google.com/?q=Tokyo+Japan",
-      false,
-      25000000,
-      5000000
-    ]);
   }
 
   // 3. Tab KotaTujuan (TAB TERPISAH KHUSUS KOTA TUJUAN & DESTINASI)
   var citySheet = ss.getSheetByName("KotaTujuan") || ss.getSheetByName("CityTrips");
   if (!citySheet) {
     citySheet = ss.insertSheet("KotaTujuan");
-    citySheet.appendRow(["id", "cityName", "startDate", "endDate", "notes", "destinations"]);
-    citySheet.getRange("A1:F1").setFontWeight("bold").setBackground("#cffafe").setHorizontalAlignment("center");
+    citySheet.appendRow(["id", "cityName", "startDate", "endDate", "notes", "destinations", "coverUrl"]);
+    citySheet.getRange("A1:G1").setFontWeight("bold").setBackground("#cffafe").setHorizontalAlignment("center");
     citySheet.appendRow([
       "city_1",
       "Bandung Romantis",
@@ -108,28 +123,18 @@ function setupSheets(ss) {
           locationUrl: "https://maps.google.com/?q=Roti+Macan+Bandung",
           date: "2026-12-25",
           time: "08:30",
-          visited: false
-        },
-        {
-          id: "dest_2",
-          placeName: "Kawah Putih Ciwidey",
-          location: "Sugihmukti, Pasirjambu, Bandung",
-          locationUrl: "https://maps.google.com/?q=Kawah+Putih+Ciwidey",
-          date: "2026-12-25",
-          time: "11:00",
-          visited: false
-        },
-        {
-          id: "dest_3",
-          placeName: "Dinner Romantis The Valley Bistro",
-          location: "Jl. Lembah Pakar Timur No. 28, Dago",
-          locationUrl: "https://maps.google.com/?q=The+Valley+Bistro+Cafe+Bandung",
-          date: "2026-12-25",
-          time: "19:00",
-          visited: false
+          visited: false,
+          imageUrl: ""
         }
-      ])
+      ]),
+      ""
     ]);
+  } else {
+    // Pastikan header coverUrl ada di kolom G jika belum ada
+    var cHeaders = citySheet.getRange(1, 1, 1, Math.max(citySheet.getLastColumn(), 1)).getValues()[0];
+    if (cHeaders.indexOf("coverUrl") === -1) {
+      citySheet.getRange(1, cHeaders.length + 1).setValue("coverUrl").setFontWeight("bold").setBackground("#cffafe");
+    }
   }
 
   return {
@@ -168,12 +173,59 @@ function getDataFromSheet(sheet) {
       } else if (key === "date" || key === "startDate" || key === "endDate") {
         item[key] = formatCellDate(val);
       } else {
-        item[key] = val;
+        item[key] = val !== undefined && val !== null ? val : "";
       }
     }
     data.push(item);
   }
   return data;
+}
+
+/**
+ * Upload gambar base64 ke Google Drive
+ * Disimpan di folder otomatis "List Date Photos Kita 📸"
+ */
+function handleImageUpload(base64Data, originalFileName) {
+  try {
+    var folderName = "List Date Photos Kita 📸";
+    var folders = DriveApp.getFoldersByName(folderName);
+    var targetFolder;
+    if (folders.hasNext()) {
+      targetFolder = folders.next();
+    } else {
+      targetFolder = DriveApp.createFolder(folderName);
+    }
+
+    var cleanBase64 = base64Data;
+    var contentType = "image/webp";
+    if (base64Data.indexOf(",") !== -1) {
+      var parts = base64Data.split(",");
+      cleanBase64 = parts[1];
+      var match = parts[0].match(/:(.*?);/);
+      if (match) contentType = match[1];
+    }
+
+    var fileName = originalFileName || ("photo_" + Date.now() + (contentType.indexOf("webp") !== -1 ? ".webp" : ".jpg"));
+    var decoded = Utilities.base64Decode(cleanBase64);
+    var blob = Utilities.newBlob(decoded, contentType, fileName);
+    var file = targetFolder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    var fileId = file.getId();
+    // Direct public preview URL
+    var directUrl = "https://lh3.googleusercontent.com/d/" + fileId;
+
+    return {
+      status: "success",
+      url: directUrl,
+      fileId: fileId
+    };
+  } catch (err) {
+    return {
+      status: "error",
+      message: err.toString()
+    };
+  }
 }
 
 /**
@@ -194,7 +246,7 @@ function doGet(e) {
       monthlyDates: monthly,
       longTermDates: longTerm,
       cityTrips: cities,
-      kotaTujuan: cities // Alias agar kompatibel
+      kotaTujuan: cities
     };
 
     return ContentService.createTextOutput(JSON.stringify(result))
@@ -208,17 +260,25 @@ function doGet(e) {
 }
 
 /**
- * Handle POST Request: Tambah, Update, Hapus
+ * Handle POST Request: Tambah, Update, Hapus, dan Upload Foto
  */
 function doPost(e) {
   try {
+    var content = e.postData.contents;
+    var params = JSON.parse(content);
+    var action = params.action; // 'add' | 'update' | 'delete' | 'uploadImage'
+
+    // 0. HANDLE UPLOAD FOTO KE GOOGLE DRIVE
+    if (action === "uploadImage") {
+      var uploadResult = handleImageUpload(params.base64, params.fileName);
+      return ContentService.createTextOutput(JSON.stringify(uploadResult))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheets = setupSheets(ss);
 
-    var content = e.postData.contents;
-    var params = JSON.parse(content);
-    var action = params.action; // 'add' | 'update' | 'delete'
-    var type = params.type;     // 'monthlyDates' | 'longTermDates' | 'cityTrips' | 'kotaTujuan'
+    var type = params.type; // 'monthlyDates' | 'longTermDates' | 'cityTrips' | 'kotaTujuan'
     var item = params.data || {};
 
     var targetSheet;
@@ -247,7 +307,8 @@ function doPost(e) {
           formatCellDate(item.date),
           item.location || "",
           item.locationUrl || "",
-          Boolean(item.visited)
+          Boolean(item.visited),
+          item.imageUrl || ""
         ]);
       } else if (type === "longTermDates" || type === "longTerm" || type === "jangkaPanjang") {
         targetSheet.appendRow([
@@ -268,7 +329,8 @@ function doPost(e) {
           formatCellDate(item.startDate),
           formatCellDate(item.endDate),
           item.notes || "",
-          JSON.stringify(item.destinations || [])
+          JSON.stringify(item.destinations || []),
+          item.coverUrl || ""
         ]);
       }
       return ContentService.createTextOutput(JSON.stringify({ status: "success", action: "add", id: newId }))
@@ -288,13 +350,14 @@ function doPost(e) {
 
       if (rowIndex !== -1) {
         if (type === "monthlyDates" || type === "monthly" || type === "bulanan") {
-          targetSheet.getRange(rowIndex, 1, 1, 6).setValues([[
+          targetSheet.getRange(rowIndex, 1, 1, 7).setValues([[
             targetId,
             item.name || "",
             formatCellDate(item.date),
             item.location || "",
             item.locationUrl || "",
-            Boolean(item.visited)
+            Boolean(item.visited),
+            item.imageUrl || ""
           ]]);
         } else if (type === "longTermDates" || type === "longTerm" || type === "jangkaPanjang") {
           targetSheet.getRange(rowIndex, 1, 1, 8).setValues([[
@@ -309,13 +372,14 @@ function doPost(e) {
           ]]);
         } else {
           // Tab KotaTujuan
-          targetSheet.getRange(rowIndex, 1, 1, 6).setValues([[
+          targetSheet.getRange(rowIndex, 1, 1, 7).setValues([[
             targetId,
             item.cityName || "",
             formatCellDate(item.startDate),
             formatCellDate(item.endDate),
             item.notes || "",
-            JSON.stringify(item.destinations || [])
+            JSON.stringify(item.destinations || []),
+            item.coverUrl || ""
           ]]);
         }
         return ContentService.createTextOutput(JSON.stringify({ status: "success", action: "update", id: targetId }))

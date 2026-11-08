@@ -7,7 +7,9 @@ import {
   FiClock,
   FiCompass,
   FiArrowRight,
+  FiMaximize2,
 } from 'react-icons/fi';
+import { formatImageUrl } from '../utils/imageUrl';
 
 function safeParseDate(val) {
   if (!val) return null;
@@ -23,7 +25,7 @@ function safeParseDate(val) {
 
 function formatDateRange(startDate, endDate) {
   const start = safeParseDate(startDate);
-  if (!start) return '-';
+  if (!start) return 'Belum ada jadwal';
 
   const startStr = start.toLocaleDateString('id-ID', {
     day: 'numeric',
@@ -56,7 +58,7 @@ function calculateDays(startDate, endDate) {
   return `${days} Hari ${nights > 0 ? `${nights} Malam` : ''}`.trim();
 }
 
-export default function CityCard({ city, onEdit, onDelete, onOpenDetail }) {
+export default function CityCard({ city, onEdit, onDelete, onOpenDetail, onOpenImage }) {
   const destinations = city.destinations || [];
   const totalDest = destinations.length;
   const visitedDest = destinations.filter((d) => d.visited).length;
@@ -66,6 +68,37 @@ export default function CityCard({ city, onEdit, onDelete, onOpenDetail }) {
     <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md hover:border-blue-300 transition-all duration-200 flex flex-col justify-between overflow-hidden group">
       {/* Top accent line */}
       <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-500" />
+
+      {/* Foto Cover Kota (Jika ada) */}
+      {city.coverUrl && (
+        <div
+          onClick={() => onOpenImage && onOpenImage(city.coverUrl, city.cityName, city.notes || 'Trip Kita', formatDateRange(city.startDate, city.endDate))}
+          className="relative h-44 w-full overflow-hidden bg-slate-100 cursor-pointer group/img"
+        >
+          <img
+            src={formatImageUrl(city.coverUrl)}
+            referrerPolicy="no-referrer"
+            loading="eager"
+            alt={city.cityName}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-105"
+            onError={(e) => {
+              const currentSrc = e.currentTarget.src;
+              if (currentSrc.includes('thumbnail?id=')) {
+                const idMatch = currentSrc.match(/id=([a-zA-Z0-9_-]+)/);
+                if (idMatch) {
+                  e.currentTarget.src = `https://lh3.googleusercontent.com/d/${idMatch[1]}`;
+                  return;
+                }
+              }
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity flex items-end justify-between p-3 text-white text-xs font-semibold">
+            <span>Lihat Cover HD</span>
+            <FiMaximize2 className="w-4 h-4" />
+          </div>
+        </div>
+      )}
 
       <div className="p-5 flex-1 flex flex-col justify-between">
         <div>

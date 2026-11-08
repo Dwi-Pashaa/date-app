@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
 import { FiX, FiMapPin, FiCalendar, FiFileText } from 'react-icons/fi';
+import ImageUploadInput from './ImageUploadInput';
 
 const emptyForm = {
   cityName: '',
   startDate: '',
   endDate: '',
   notes: '',
+  coverUrl: '',
 };
 
 export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
   const [form, setForm] = useState(emptyForm);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (editCity) {
@@ -18,6 +21,7 @@ export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
         startDate: editCity.startDate || '',
         endDate: editCity.endDate || '',
         notes: editCity.notes || '',
+        coverUrl: editCity.coverUrl || '',
       });
     } else {
       setForm(emptyForm);
@@ -31,6 +35,10 @@ export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleCoverChange = (url) => {
+    setForm((prev) => ({ ...prev, coverUrl: url }));
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.cityName.trim() || !form.startDate) return;
@@ -38,6 +46,7 @@ export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
     onSave({
       ...form,
       endDate: form.endDate || form.startDate,
+      coverUrl: form.coverUrl || '',
       destinations: editCity ? editCity.destinations : [],
     });
   };
@@ -120,6 +129,15 @@ export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
             </div>
           </div>
 
+          {/* Foto Cover Kota */}
+          <ImageUploadInput
+            value={form.coverUrl}
+            onChange={handleCoverChange}
+            onUploadStatusChange={setUploading}
+            label="Foto Cover Kota / Trip"
+            placeholder="Pilih foto pemandangan / landmark kota"
+          />
+
           {/* Catatan / Notes */}
           <div>
             <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -147,9 +165,14 @@ export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
             </button>
             <button
               type="submit"
-              className="flex-1 py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+              disabled={uploading}
+              className={`flex-1 py-3 px-4 font-bold text-sm rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                uploading
+                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/20'
+              }`}
             >
-              {isEdit ? 'Simpan Perubahan' : 'Buat Trip Kota'}
+              {uploading ? 'Sedang Mengunggah Foto...' : isEdit ? 'Simpan Perubahan' : 'Buat Trip Kota'}
             </button>
           </div>
         </form>
@@ -157,4 +180,3 @@ export default function CityFormModal({ isOpen, editCity, onSave, onClose }) {
     </div>
   );
 }
-

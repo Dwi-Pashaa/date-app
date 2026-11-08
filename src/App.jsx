@@ -17,6 +17,8 @@ import LoadingSpinner from './components/LoadingSpinner';
 import Toast from './components/Toast';
 import ConfirmDialog from './components/ConfirmDialog';
 import WelcomeSplash from './components/WelcomeSplash';
+import ImageLightboxModal from './components/ImageLightboxModal';
+import Pagination from './components/Pagination';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -35,6 +37,11 @@ export default function App() {
   const [savingsItem, setSavingsItem] = useState(null);
   const [showSheetsModal, setShowSheetsModal] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [lightboxData, setLightboxData] = useState(null);
+
+  const handleOpenImage = (imageUrl, title, subtitle, date) => {
+    setLightboxData({ imageUrl, title, subtitle, date });
+  };
 
   // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,6 +49,16 @@ export default function App() {
   const [sortBy, setSortBy] = useState('newest');
   const [isSheetsConnected, setIsSheetsConnected] = useState(Boolean(api.getSheetsUrl()));
   const [toast, setToast] = useState(null);
+
+  // Pagination
+  const PAGE_SIZE = 6;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset page ke 1 saat tab, filter, atau search berubah
+  const goToPage = useCallback((page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   // Fetch data awal
   const fetchData = useCallback(async () => {
@@ -98,6 +115,19 @@ export default function App() {
     };
   }, [fetchData, silentSync, showForm, showCityForm, selectedCityForDetail]);
 
+  // Helper: sync ulang data dari Sheets setelah delay (untuk memastikan foto dari Drive sudah masuk)
+  const syncAfterDelay = useCallback((delayMs = 4000) => {
+    if (!api.getSheetsUrl()) return;
+    setTimeout(async () => {
+      try {
+        const data = await api.getAllData(true); // force re-fetch
+        setMonthlyDates(data.monthlyDates);
+        setLongTermDates(data.longTermDates);
+        setCityTrips(data.cityTrips);
+      } catch {}
+    }, delayMs);
+  }, []);
+
   // CRUD handlers - Monthly & Long Term
   const handleSave = async (data) => {
     try {
@@ -126,6 +156,10 @@ export default function App() {
       }
       setShowForm(false);
       setEditItem(null);
+      // Sync ulang setelah 4 detik agar URL foto dari Drive sudah tersimpan di Sheets
+      if (data.imageUrl && data.imageUrl.startsWith('https://lh3.googleusercontent.com')) {
+        syncAfterDelay(4000);
+      }
     } catch (err) {
       console.error('Gagal menyimpan:', err);
       setToast({ message: 'Gagal menyimpan destinasi.', type: 'error' });
@@ -148,6 +182,10 @@ export default function App() {
       }
       setShowCityForm(false);
       setEditCity(null);
+      // Sync ulang setelah 4 detik agar URL foto cover dari Drive sudah tersimpan di Sheets
+      if (cityData.coverUrl && cityData.coverUrl.startsWith('https://lh3.googleusercontent.com')) {
+        syncAfterDelay(4000);
+      }
     } catch (err) {
       console.error('Gagal menyimpan kota:', err);
       setToast({ message: 'Gagal menyimpan kota tujuan.', type: 'error' });
@@ -160,6 +198,13 @@ export default function App() {
     );
     setSelectedCityForDetail(updatedCity);
     await api.updateCityTrip(updatedCity.id, updatedCity);
+    // Sync setelah delay jika ada foto destinasi baru dari Drive
+    const hasNewDrivePhoto = updatedCity.destinations?.some(
+      (d) => d.imageUrl && d.imageUrl.startsWith('https://lh3.googleusercontent.com')
+    );
+    if (hasNewDrivePhoto || (updatedCity.coverUrl && updatedCity.coverUrl.startsWith('https://lh3.googleusercontent.com'))) {
+      syncAfterDelay(4000);
+    }
   };
 
   const handleSaveSavings = async (updatedItem) => {
@@ -315,6 +360,20 @@ export default function App() {
     return result;
   }, [activeTab, monthlyDates, longTermDates, cityTrips, statusFilter, searchQuery, sortBy]);
 
+  // Total pages & paginated items
+  const totalPages = Math.ceil(filteredList.length / PAGE_SIZE) || 1;
+  const paginatedList = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredList.slice(start, start + PAGE_SIZE);
+  }, [filteredList, currentPage, PAGE_SIZE]);
+
+  // Pastikan currentPage tidak melebihi totalPages saat item dihapus atau difilter
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   const rawCount =
     activeTab === 'monthly'
       ? monthlyDates.length
@@ -346,6 +405,7 @@ export default function App() {
               setActiveTab(tab);
               setSearchQuery('');
               setStatusFilter('all');
+              setCurrentPage(1);
             }}
             monthlyCt={monthlyDates.length}
             longTermCt={longTermDates.length}
@@ -378,11 +438,11 @@ export default function App() {
         {rawCount > 0 && (
           <FilterBar
             searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
+            onSearchChange={(v) => { setSearchQuery(v); setCurrentPage(1); }}
             statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
+            onStatusFilterChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}
             sortBy={sortBy}
-            onSortChange={setSortBy}
+            onSortChange={(v) => { setSortBy(v); setCurrentPage(1); }}
             isLongTerm={activeTab === 'longterm'}
           />
         )}
@@ -417,34 +477,49 @@ export default function App() {
               Reset Filter
             </button>
           </div>
-        ) : activeTab === 'cities' ? (
-          /* Grid Kota Tujuan */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-            {filteredList.map((city) => (
-              <CityCard
-                key={city.id}
-                city={city}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onOpenDetail={(c) => setSelectedCityForDetail(c)}
-              />
-            ))}
-          </div>
         ) : (
-          /* Grid Bulanan & Jangka Panjang */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-            {filteredList.map((item) => (
-              <DateCard
-                key={item.id}
-                item={item}
-                type={activeTab}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onToggleVisited={handleToggleVisited}
-                onOpenSavings={(it) => setSavingsItem(it)}
-              />
-            ))}
-          </div>
+          <>
+            {activeTab === 'cities' ? (
+              /* Grid Kota Tujuan */
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                {paginatedList.map((city) => (
+                  <CityCard
+                    key={city.id}
+                    city={city}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onOpenDetail={(c) => setSelectedCityForDetail(c)}
+                    onOpenImage={handleOpenImage}
+                  />
+                ))}
+              </div>
+            ) : (
+              /* Grid Bulanan & Jangka Panjang */
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                {paginatedList.map((item) => (
+                  <DateCard
+                    key={item.id}
+                    item={item}
+                    type={activeTab}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onToggleVisited={handleToggleVisited}
+                    onOpenSavings={(it) => setSavingsItem(it)}
+                    onOpenImage={handleOpenImage}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredList.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={goToPage}
+            />
+          </>
         )}
       </main>
 
@@ -486,6 +561,7 @@ export default function App() {
           city={selectedCityForDetail}
           onClose={() => setSelectedCityForDetail(null)}
           onUpdateCity={handleUpdateCityFromDetail}
+          onOpenImage={handleOpenImage}
         />
       )}
 
@@ -524,6 +600,18 @@ export default function App() {
 
       {/* Opening Splash Animation */}
       {showSplash && <WelcomeSplash onFinish={() => setShowSplash(false)} />}
+
+      {/* Image Lightbox Modal */}
+      {lightboxData && (
+        <ImageLightboxModal
+          isOpen={Boolean(lightboxData)}
+          imageUrl={lightboxData.imageUrl}
+          title={lightboxData.title}
+          subtitle={lightboxData.subtitle}
+          date={lightboxData.date}
+          onClose={() => setLightboxData(null)}
+        />
+      )}
     </div>
   );
 }

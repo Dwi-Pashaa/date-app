@@ -9,8 +9,10 @@ import {
   FiClock,
   FiPlus,
   FiAward,
+  FiMaximize2,
 } from 'react-icons/fi';
 import { FaPiggyBank } from 'react-icons/fa';
+import { formatImageUrl } from '../utils/imageUrl';
 
 function formatCurrency(num) {
   return new Intl.NumberFormat('id-ID', {
@@ -56,19 +58,28 @@ function getDaysUntil(dateStr) {
   return `${diff} hari lagi`;
 }
 
-export default function DateCard({ item, type, onEdit, onDelete, onToggleVisited, onOpenSavings }) {
+export default function DateCard({
+  item,
+  type,
+  onEdit,
+  onDelete,
+  onToggleVisited,
+  onOpenSavings,
+  onOpenImage,
+}) {
   const savingsPercent =
     type === 'longterm' && item.savingsTarget
       ? Math.min(100, Math.round(((item.savedAmount || 0) / item.savingsTarget) * 100))
       : 0;
 
-  const isSavingsCompleted = type === 'longterm' && item.savingsTarget > 0 && (item.savedAmount || 0) >= item.savingsTarget;
+  const isSavingsCompleted =
+    type === 'longterm' && item.savingsTarget > 0 && (item.savedAmount || 0) >= item.savingsTarget;
   const daysLabel = getDaysUntil(item.date);
   const isPast = daysLabel === 'Sudah lewat';
 
   return (
     <div
-      className={`relative bg-white rounded-2xl border transition-all duration-200 flex flex-col justify-between overflow-hidden ${
+      className={`relative bg-white rounded-2xl border transition-all duration-200 flex flex-col justify-between overflow-hidden group ${
         item.visited
           ? 'border-emerald-200 bg-emerald-50/20 shadow-xs'
           : 'border-slate-200/90 shadow-xs hover:shadow-md hover:border-blue-300'
@@ -84,6 +95,38 @@ export default function DateCard({ item, type, onEdit, onDelete, onToggleVisited
             : 'bg-blue-600'
         }`}
       />
+
+      {/* Foto Thumbnail Banner (Jika ada) */}
+      {item.imageUrl && (
+        <div
+          onClick={() => onOpenImage && onOpenImage(item.imageUrl, item.name, item.location, formatDate(item.date))}
+          className="relative h-44 w-full overflow-hidden bg-slate-100 cursor-pointer group/img"
+        >
+          <img
+            src={formatImageUrl(item.imageUrl)}
+            referrerPolicy="no-referrer"
+            loading="eager"
+            alt={item.name}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-105"
+            onError={(e) => {
+              // Fallback coba lh3 langsung jika thumbnail gagal
+              const currentSrc = e.currentTarget.src;
+              if (currentSrc.includes('thumbnail?id=')) {
+                const idMatch = currentSrc.match(/id=([a-zA-Z0-9_-]+)/);
+                if (idMatch) {
+                  e.currentTarget.src = `https://lh3.googleusercontent.com/d/${idMatch[1]}`;
+                  return;
+                }
+              }
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity flex items-end justify-between p-3 text-white text-xs font-semibold">
+            <span>Lihat Foto Penuh</span>
+            <FiMaximize2 className="w-4 h-4" />
+          </div>
+        </div>
+      )}
 
       <div className="p-5 flex-1 flex flex-col justify-between">
         <div>
@@ -123,9 +166,7 @@ export default function DateCard({ item, type, onEdit, onDelete, onToggleVisited
                   ) : (
                     <span
                       className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md ${
-                        isPast
-                          ? 'text-rose-600 bg-rose-50'
-                          : 'text-blue-600 bg-blue-50'
+                        isPast ? 'text-rose-600 bg-rose-50' : 'text-blue-600 bg-blue-50'
                       }`}
                     >
                       <FiClock className="w-3 h-3" />
@@ -236,9 +277,7 @@ export default function DateCard({ item, type, onEdit, onDelete, onToggleVisited
               <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden mb-2">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
-                    savingsPercent >= 100
-                      ? 'bg-emerald-500'
-                      : 'bg-blue-600'
+                    savingsPercent >= 100 ? 'bg-emerald-500' : 'bg-blue-600'
                   }`}
                   style={{ width: `${savingsPercent}%` }}
                 />
@@ -249,9 +288,7 @@ export default function DateCard({ item, type, onEdit, onDelete, onToggleVisited
                 <span className={savingsPercent >= 100 ? 'text-emerald-700 font-bold' : 'text-blue-700 font-bold'}>
                   {formatCurrency(item.savedAmount || 0)}
                 </span>
-                <span>
-                  Target: {formatCurrency(item.savingsTarget)}
-                </span>
+                <span>Target: {formatCurrency(item.savingsTarget)}</span>
               </div>
             </div>
           </div>

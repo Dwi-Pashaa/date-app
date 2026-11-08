@@ -1,6 +1,12 @@
 // Smart Data API
-// Data disimpan di In-Memory State (dan langsung sinkron ke Google Spreadsheet jika terhubung).
-// Sesuai permintaan: TIDAK menyimpan data list ke localStorage browser.
+// Data disimpan di In-Memory State & langsung sinkron otomatis ke Google Spreadsheet secara realtime.
+
+// =========================================================================================
+// 📌 URL GOOGLE SPREADSHEET TERTANAM (EMBEDDED)
+// Masukkan URL Google Apps Script Web App kamu di sini agar tertanam permanen.
+// Siapapun yang membuka web dari HP / laptop mana pun akan langsung terhubung otomatis!
+// =========================================================================================
+export const EMBEDDED_SHEETS_URL = "";
 
 const initialData = {
   monthlyDates: [
@@ -104,13 +110,21 @@ if (typeof window !== 'undefined') {
   } catch {}
 }
 
-// URL Google Sheets dari memory/session
+// Mendapatkan URL Google Sheets:
+// 1. Prioritas utama: URL yang tertanam langsung di kode (EMBEDDED_SHEETS_URL)
+// 2. Environment variable (.env: VITE_SHEETS_API_URL)
+// 3. Input dinamis dari pengguna
 export function getSheetsUrl() {
-  if (typeof window === 'undefined') return '';
-  const stored = localStorage.getItem('list_date_sheets_url');
-  if (stored && stored.trim()) return stored.trim();
+  if (EMBEDDED_SHEETS_URL && EMBEDDED_SHEETS_URL.trim()) {
+    return EMBEDDED_SHEETS_URL.trim();
+  }
   const envUrl = import.meta.env.VITE_SHEETS_API_URL;
-  return envUrl ? envUrl.trim() : '';
+  if (envUrl && envUrl.trim()) return envUrl.trim();
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('list_date_sheets_url');
+    if (stored && stored.trim()) return stored.trim();
+  }
+  return '';
 }
 
 export function setSheetsUrl(url) {

@@ -64,3 +64,4 @@ Secara keseluruhan, sistem telah berjalan dengan sangat baik untuk kebutuhan fun
 - ✅ Terhubung ke Google Spreadsheet resmi.
 
 Kelemahan terbesar saat ini terletak pada **ketergantungan penyimpanan ke Google Sheets** karena `localStorage` dinonaktifkan: jika koneksi internet terputus atau Google Sheets belum disetel, data yang diinput di browser bersifat sementara (*ephemeral*).
+

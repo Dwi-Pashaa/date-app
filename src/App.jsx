@@ -64,9 +64,47 @@ export default function App() {
     }
   }, []);
 
+  // Silent Auto-Sync di background (Real-time tanpa loading spinner agar tidak mengganggu)
+  const silentSync = useCallback(async () => {
+    if (!api.getSheetsUrl()) return;
+    try {
+      const [monthly, longTerm, cities] = await Promise.all([
+        api.getMonthlyDates(),
+        api.getLongTermDates(),
+        api.getCityTrips(),
+      ]);
+      setMonthlyDates(monthly);
+      setLongTermDates(longTerm);
+      setCityTrips(cities);
+      setIsSheetsConnected(true);
+    } catch {}
+  }, []);
+
+  // Auto-Sync berkala (setiap 12 detik) & saat aplikasi dibuka / tab kembali aktif
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && !showForm && !showCityForm && !selectedCityForDetail) {
+        silentSync();
+      }
+    }, 12000);
+
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        silentSync();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [fetchData, silentSync, showForm, showCityForm, selectedCityForDetail]);
 
   // CRUD handlers - Monthly & Long Term
   const handleSave = async (data) => {
